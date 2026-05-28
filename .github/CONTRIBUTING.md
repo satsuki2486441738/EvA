@@ -13,7 +13,7 @@ editable local packages:
 ```bash
 pip install torch==2.6.0 torchaudio==2.6.0
 pip install flash-attn==2.7.4.post1 --no-build-isolation
-pip install -r src/requirements.txt
+pip install -r requirements.txt
 pip install -e finetune_codes/eva_processor
 pip install -e finetune_codes/kimi_audio_eva
 pip install -e finetune_codes/qwen2_5_omni_eva

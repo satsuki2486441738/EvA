@@ -20,7 +20,7 @@ The following license evidence is present in the repository:
 | `src/third_party/kimia_infer/models/tokenizer/glm4/cosyvoice/` | Many file headers state Apache License 2.0 and upstream authors from Alibaba, Mobvoi, Johns Hopkins, ESPnet-related contributors, or Hugging Face. |
 | `src/third_party/kimia_infer/models/detokenizer/vocoder/alias_free_activation/` | File headers mention Apache License 2.0 for alias-free-torch-derived code and MIT-derived filtering utilities. |
 | `src/third_party/kimia_infer/models/detokenizer/vocoder/bigvgan.py` and CUDA activation files | File headers include NVIDIA copyright notices. |
-| Selected files under `src/third_party/kimia_infer/models/tokenizer/glm4/cosyvoice/flow/stable/` | File headers mention MIT-licensed adaptations from x-transformers, audio-diffusion-pytorch, AudioCraft, or NVIDIA BigVGAN components. |
+| Selected files under `src/third_party/kimia_infer/models/tokenizer/glm4/cosyvoice/flow/stable/` | File headers mention MIT-licensed adaptations from x-transformers, audio-diffusion-pytorch, AudioCraft, or NVIDIA BigVGAN components. Short SPDX notices are included under `flow/stable/LICENSES/`. |
 
 ## Model Weights
 

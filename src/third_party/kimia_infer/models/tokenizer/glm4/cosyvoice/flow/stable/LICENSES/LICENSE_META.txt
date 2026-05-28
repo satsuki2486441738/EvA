@@ -1,0 +1,7 @@
+SPDX-License-Identifier: MIT
+
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This notice covers code adapted from AudioCraft.
+Upstream license text:
+https://raw.githubusercontent.com/Stability-AI/stable-audio-tools/main/LICENSES/LICENSE_META.txt

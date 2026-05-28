@@ -1,0 +1,7 @@
+SPDX-License-Identifier: MIT
+
+Copyright (c) 2022 NVIDIA CORPORATION.
+
+This notice covers code adapted from NVIDIA BigVGAN components.
+Upstream license text:
+https://raw.githubusercontent.com/Stability-AI/stable-audio-tools/main/LICENSES/LICENSE_NVIDIA.txt

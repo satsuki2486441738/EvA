@@ -1,0 +1,7 @@
+SPDX-License-Identifier: MIT
+
+Copyright (c) 2022 archinet.ai
+
+This notice covers code adapted from audio-diffusion-pytorch.
+Upstream license text:
+https://raw.githubusercontent.com/Stability-AI/stable-audio-tools/main/LICENSES/LICENSE_ADP.txt

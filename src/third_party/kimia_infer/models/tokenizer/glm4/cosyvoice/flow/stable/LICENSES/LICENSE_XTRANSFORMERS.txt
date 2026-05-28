@@ -1,0 +1,7 @@
+SPDX-License-Identifier: MIT
+
+Copyright (c) 2020 Phil Wang
+
+This notice covers code adapted from x-transformers.
+Upstream license text:
+https://raw.githubusercontent.com/Stability-AI/stable-audio-tools/main/LICENSES/LICENSE_XTRANSFORMERS.txt
