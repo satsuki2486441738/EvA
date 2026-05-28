@@ -225,5 +225,10 @@ bash src/scripts/train_qwen2_5_omni_eva.sh --help
 
 ## 许可证
 
-本仓库使用 MIT License 发布。`src/third_party/` 下的第三方代码和外部模型权重仍受各自
-license 与模型条款约束。重新分发权重或衍生模型前，请确认对应上游许可。
+EvA 自有代码使用 [MIT License](LICENSE) 发布。
+
+`src/third_party/` 下随仓库包含的第三方源码不会被 EvA 重新授权。当前仓库中可见的第三方
+license 依据见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+本仓库不包含模型权重。外部 backbone、tokenizer、CED、Whisper、Kimi-Audio、
+Qwen2.5-Omni、GLM-4-Voice 以及 EvA checkpoint 权重需要按各自发布渠道的条款使用。

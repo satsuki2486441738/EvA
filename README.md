@@ -233,7 +233,12 @@ If you find EvA useful, please cite:
 
 ## License
 
-This repository is released under the MIT License. Third-party code under
-`src/third_party/` and external model weights remain subject to their own
-licenses and model terms. Please review the upstream licenses before
-redistributing weights or derivative models.
+EvA's own code is released under the [MIT License](LICENSE).
+
+Third-party source code included under `src/third_party/` is not relicensed by
+EvA. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the license
+evidence currently present in this repository.
+
+Model weights are not included in this repository. External backbone, tokenizer,
+CED, Whisper, Kimi-Audio, Qwen2.5-Omni, GLM-4-Voice, and EvA checkpoint weights
+must be used under their own distribution terms.
