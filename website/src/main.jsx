@@ -11,7 +11,6 @@ import {
   ExternalLink,
   Layers,
   Package,
-  Play,
   Sparkles
 } from "lucide-react";
 import "./styles.css";
@@ -367,6 +366,45 @@ function FeatureCard({ icon: Icon, title, text }) {
 }
 
 function DatasetPanel() {
+  const [samples, setSamples] = useState([]);
+  const [activeSample, setActiveSample] = useState(0);
+  const [loadState, setLoadState] = useState("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDemoSamples() {
+      try {
+        const response = await fetch("./demo/demo_pairs.jsonl");
+        if (!response.ok) {
+          throw new Error(`Failed to load demo data: ${response.status}`);
+        }
+        const text = await response.text();
+        const records = text
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .map((line) => JSON.parse(line));
+
+        if (!cancelled) {
+          setSamples(records);
+          setLoadState("ready");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setLoadState("error");
+        }
+      }
+    }
+
+    loadDemoSamples();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const sample = samples[activeSample];
+
   return (
     <div>
       <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
@@ -378,15 +416,14 @@ function DatasetPanel() {
             Audio-grounded QA Explorer
           </h3>
           <p className="mt-4 leading-7 text-slate-600">
-            A reserved presentation panel for EvA-Perception examples, designed
-            to show audio evidence, captions, and question-answer annotations
-            once the final dataset samples are ready.
+            Browse curated EvA-Perception examples with the original audio,
+            evidence-focused captions, and aligned question-answer annotations.
           </p>
           <div className="mt-6 grid grid-cols-3 gap-3">
             {[
-              ["Audio", "clip"],
-              ["Caption", "evidence"],
-              ["QA", "pairs"]
+              ["Samples", samples.length || 3],
+              ["Audio", "WAV"],
+              ["Format", "JSONL"]
             ].map(([label, value]) => (
               <div key={label} className="rounded-md border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -396,6 +433,26 @@ function DatasetPanel() {
               </div>
             ))}
           </div>
+          <div className="mt-6 space-y-2">
+            {(samples.length ? samples : [{ id: "Loading..." }, { id: "Loading..." }, { id: "Loading..." }]).map(
+              (item, index) => (
+                <button
+                  key={`${item.id}-${index}`}
+                  type="button"
+                  onClick={() => setActiveSample(index)}
+                  disabled={!samples.length}
+                  className={`flex w-full items-center justify-between rounded-md border px-4 py-3 text-left text-sm transition ${
+                    activeSample === index && samples.length
+                      ? "border-indigo-200 bg-indigo-50 text-indigo-800"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="font-semibold">Sample {index + 1}</span>
+                  <span className="font-mono text-xs text-slate-500">{item.id}</span>
+                </button>
+              )
+            )}
+          </div>
         </div>
 
         <div className="rounded-lg border border-slate-200 bg-white shadow-soft">
@@ -403,56 +460,60 @@ function DatasetPanel() {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold text-slate-950">Sample Preview</p>
-                <p className="text-sm text-slate-500">Placeholder layout</p>
+                <p className="text-sm text-slate-500">
+                  {sample ? sample.id : loadState === "error" ? "Unable to load demo data" : "Loading demo data"}
+                </p>
               </div>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                Pending data
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                Live demo
               </span>
             </div>
           </div>
           <div className="space-y-5 p-5">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-              <div className="flex items-center gap-4">
-                <button
-                  type="button"
-                  aria-label="Audio preview placeholder"
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-300 text-white"
-                  disabled
-                >
-                  <Play className="ml-0.5 h-5 w-5" />
-                </button>
-                <div className="min-w-0 flex-1">
-                  <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-                    <div className="h-full w-2/5 rounded-full bg-slate-300" />
-                  </div>
-                  <div className="mt-2 flex justify-between text-xs font-medium text-slate-400">
-                    <span>0:00</span>
-                    <span>0:15</span>
-                  </div>
+            {sample ? (
+              <>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <audio
+                    key={sample.id}
+                    controls
+                    preload="metadata"
+                    src={`./demo/${sample.demo_audio_path}`}
+                    className="w-full"
+                  >
+                    Your browser does not support the audio element.
+                  </audio>
                 </div>
-              </div>
-            </div>
 
-            <div className="flex items-center gap-4">
-              <span className="h-2 w-24 rounded-full bg-slate-200" />
-              <span className="h-2 flex-1 rounded-full bg-slate-100" />
-            </div>
+                <div className="rounded-lg border border-slate-200 p-4">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    Evidence Caption
+                  </p>
+                  <p className="leading-7 text-slate-700">{sample.caption}</p>
+                </div>
 
-            <div className="rounded-lg border border-slate-200 p-4">
-              <div className="mb-3 h-2 w-40 rounded-full bg-slate-200" />
-              <div className="space-y-2">
-                <div className="h-2 rounded-full bg-slate-100" />
-                <div className="h-2 w-11/12 rounded-full bg-slate-100" />
-                <div className="h-2 w-4/5 rounded-full bg-slate-100" />
-              </div>
-            </div>
+                <div className="rounded-lg border border-slate-200 p-4">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    Question
+                  </p>
+                  <p className="font-semibold leading-7 text-slate-950">
+                    {sample.qa?.question}
+                  </p>
+                </div>
 
-            {[0, 1, 2].map((item) => (
-              <div key={item} className="rounded-lg border border-slate-200 p-4">
-                <div className="mb-3 h-2 w-3/4 rounded-full bg-slate-200" />
-                <div className="h-2 w-1/2 rounded-full bg-slate-100" />
+                <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-4">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-indigo-600">
+                    Answer
+                  </p>
+                  <p className="leading-7 text-slate-700">{sample.qa?.answer}</p>
+                </div>
+              </>
+            ) : (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-6 text-sm leading-6 text-slate-500">
+                {loadState === "error"
+                  ? "Demo data could not be loaded. Please check public/demo/demo_pairs.jsonl."
+                  : "Loading demo samples..."}
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>
