@@ -8,6 +8,7 @@ __pycache__/
 # Distribution / packaging
 build/
 dist/
+node_modules/
 *.egg-info/
 *.egg
 pip-log.txt
@@ -35,6 +36,7 @@ data/raw/
 # Evaluation and plot artifacts
 *.png
 !docs/**/*.png
+!website/public/**/*.png
 
 # Temporary data
 *.tmp
