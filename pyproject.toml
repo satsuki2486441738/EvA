@@ -1,0 +1,27 @@
+# 仓库级 Python 工具配置（lint / format / pytest）。
+# 不是包定义文件 —— eva_processor / qwen2_5_omni_eva / kimi_audio_eva
+# 各自有独立的 pyproject.toml。
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+extend-exclude = '''
+/(
+    src/third_party/kimia_infer/models/tokenizer/glm4
+  | outputs
+  | logs
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["eva_processor", "kimi_audio_eva", "qwen2_5_omni_eva", "kimia_infer"]
+skip = ["src/third_party/kimia_infer/models/tokenizer/glm4"]
+
+[tool.pytest.ini_options]
+testpaths = ["demo/tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-ra --strict-markers"

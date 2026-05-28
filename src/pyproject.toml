@@ -1,0 +1,46 @@
+# ---------- pyproject.toml ----------
+[build-system]
+requires = ["setuptools", "wheel", "torch"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name        = "eva-kimia-infer"
+version     = "0.1.0"
+description = "Vendored kimia_infer helpers used by EvA examples"
+readme      = "README.md"
+license     = {text = "MIT"}
+authors     = [{name = "EvA contributors"}]
+
+dependencies = [
+  "torch",
+  "torchaudio",
+  "flash-attn",
+  "soundfile",
+  "librosa",
+  "tqdm",
+  "loguru",
+  "huggingface_hub",
+  "transformers",
+  "conformer",
+  "diffusers",
+  "tiktoken",
+  "ninja",
+  "timm",
+  "torchdyn"
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["third_party"]
+include = ["kimia_infer*"]
+
+[tool.setuptools.package-data]
+"kimia_infer" = ["**/*"]
+
+[project.urls]
+Repository = "https://arxiv.org/abs/2603.27667"
+
+[project.entry-points."vllm.general_plugins"]
+eva_vllm = "kimia_infer.api.vllm_eva:register_eva_model"

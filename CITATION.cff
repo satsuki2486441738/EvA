@@ -1,0 +1,42 @@
+cff-version: 1.2.0
+message: "If you use EvA, please cite this paper."
+title: "EvA: An Evidence-First Audio Understanding Paradigm for LALMs"
+authors:
+  - family-names: "Xie"
+    given-names: "Xinyuan"
+  - family-names: "Chen"
+    given-names: "Shunian"
+  - family-names: "Liu"
+    given-names: "Zhiheng"
+  - family-names: "Zhang"
+    given-names: "Yuhao"
+  - family-names: "Lv"
+    given-names: "Zhiqiang"
+  - family-names: "Liang"
+    given-names: "Liyin"
+  - family-names: "Wang"
+    given-names: "Benyou"
+license: MIT
+url: "https://arxiv.org/abs/2603.27667"
+abstract: "EvA proposes an evidence-first audio understanding paradigm for large audio-language models."
+preferred-citation:
+  type: article
+  title: "EvA: An Evidence-First Audio Understanding Paradigm for LALMs"
+  authors:
+    - family-names: "Xie"
+      given-names: "Xinyuan"
+    - family-names: "Chen"
+      given-names: "Shunian"
+    - family-names: "Liu"
+      given-names: "Zhiheng"
+    - family-names: "Zhang"
+      given-names: "Yuhao"
+    - family-names: "Lv"
+      given-names: "Zhiqiang"
+    - family-names: "Liang"
+      given-names: "Liyin"
+    - family-names: "Wang"
+      given-names: "Benyou"
+  year: 2026
+  url: "https://arxiv.org/abs/2603.27667"
+  notes: "arXiv:2603.27667"

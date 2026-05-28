@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eva_processor"
+version = "0.1.0"
+description = "EvA dual-stream processor: shared CED feature processor for Kimi-Audio / Qwen2.5-Omni"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.0",
+]
+
+[tool.setuptools]
+packages = ["eva_processor"]
+
+[tool.setuptools.package-dir]
+"eva_processor" = "."

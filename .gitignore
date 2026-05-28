@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+pip-log.txt
+
+# Editable install metadata
+__editable__.*
+
+# Notebooks
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# 运行时产物（不进版本控制）
+logs/
+checkpoints/
+*.log
+*.nohup.log
+nohup.out
+wandb/
+runs/
+
+# 数据（不进版本控制）
+data/training/
+data/raw/
+
+# 评估 / 绘图产物
+*.png
+!docs/**/*.png
+
+# 临时数据
+*.tmp
+*.cache
+.cache/
+.pytest_cache/
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 模型权重（外部存储，不进仓库）
+*.bin
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+
+# 但以下例外：
+!**/configuration_*.py
