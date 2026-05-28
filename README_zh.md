@@ -9,7 +9,7 @@
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11-blue)](#安装)
 
-[论文](https://arxiv.org/abs/2603.27667) | [数据集](https://huggingface.co/datasets/SatsukiVie/EvidenceFirst-Audio) | [模型](#资源) | [安装](#安装) | [训练](#训练) | [推理](#推理)
+[论文](https://arxiv.org/abs/2603.27667) | [数据集](https://huggingface.co/datasets/SatsukiVie/EvidenceFirst-Audio) | [安装](#安装) | [训练](#训练) | [推理](#推理)
 
 [English](README.md) | 中文
 
@@ -17,24 +17,6 @@
 
 EvA 为音频语言基础模型加入基于 CED 的第二路音频证据流。共享的 EvA
 processor 会将 CED 特征与基础模型的音频 token 对齐，并把融合后的表示注入语言模型。
-
-## 亮点
-
-| 项目 | 说明 |
-|---|---|
-| Evidence-first 音频建模 | 在语言模型消费融合音频表示前，引入显式的 CED 证据流。 |
-| 两套支持的骨干模型 | 当前公开代码支持 Kimi-Audio-EvA 和 Qwen2.5-Omni-EvA。 |
-| 可运行的开源结构 | 包含安装说明、demo 数据、smoke tests、训练脚本和推理入口。 |
-| 干净的公开范围 | checkpoint、日志、私有数据集和历史实验输出均不纳入仓库。 |
-
-## 资源
-
-| 资源 | 链接 |
-|---|---|
-| 论文 | [arXiv:2603.27667](https://arxiv.org/abs/2603.27667) |
-| 数据集 | [Hugging Face: SatsukiVie/EvidenceFirst-Audio](https://huggingface.co/datasets/SatsukiVie/EvidenceFirst-Audio) |
-| 模型 | Hugging Face: TBD; ModelScope: TBD |
-| 数据集镜像 | ModelScope: TBD |
 
 当前公开版本保留两套支持的骨干：
 
@@ -193,6 +175,19 @@ Kimi-Audio-EvA 训练数据为 JSONL，每行一个 JSON object：
 
 Qwen2.5-Omni-EvA 可以使用相同格式，但不需要 `audio_tokens`。相对音频路径会按 JSONL
 文件所在目录解析。
+
+Kimi-Audio-EvA 的 `audio_tokens` 需要在训练前由 Kimi/GLM-4 audio tokenizer 生成。
+从只包含音频路径的 JSONL 开始，运行：
+
+```bash
+python -m kimi_audio_eva.extract_semantic_codes \
+  --model_name_or_path /path/to/Kimi-Audio-EvA-Base \
+  --input_file demo/data/audio_understanding/data.jsonl \
+  --output_file demo/data/audio_understanding/data_with_semantic_codes.jsonl
+```
+
+这个脚本会给每条 audio message 追加 `audio_tokens` 字段。它支持断点续跑；在可见多 GPU
+环境下也可以并行处理。
 
 ## 验证
 

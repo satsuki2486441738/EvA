@@ -9,7 +9,7 @@
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11-blue)](#installation)
 
-[Paper](https://arxiv.org/abs/2603.27667) | [Dataset](https://huggingface.co/datasets/SatsukiVie/EvidenceFirst-Audio) | [Models](#resources) | [Installation](#installation) | [Training](#train) | [Inference](#inference)
+[Paper](https://arxiv.org/abs/2603.27667) | [Dataset](https://huggingface.co/datasets/SatsukiVie/EvidenceFirst-Audio) | [Installation](#installation) | [Training](#train) | [Inference](#inference)
 
 English | [中文](README_zh.md)
 
@@ -18,24 +18,6 @@ English | [中文](README_zh.md)
 EvA adds a CED-based second audio stream to audio-language foundation models.
 The shared EvA processor aligns CED features with the base model audio tokens and
 injects the fused representation into the language model.
-
-## Highlights
-
-| Item | Description |
-|---|---|
-| Evidence-first audio modeling | Adds an explicit CED evidence stream before the language model consumes fused audio representations. |
-| Two supported backbones | Public code supports Kimi-Audio-EvA and Qwen2.5-Omni-EvA. |
-| Open-source runnable layout | Includes install instructions, demo data, smoke tests, training scripts and inference entry points. |
-| Clean public scope | Checkpoints, logs, private datasets and historical experiment outputs are intentionally excluded. |
-
-## Resources
-
-| Resource | Link |
-|---|---|
-| Paper | [arXiv:2603.27667](https://arxiv.org/abs/2603.27667) |
-| Dataset | [Hugging Face: SatsukiVie/EvidenceFirst-Audio](https://huggingface.co/datasets/SatsukiVie/EvidenceFirst-Audio) |
-| Models | Hugging Face: TBD; ModelScope: TBD |
-| Dataset mirror | ModelScope: TBD |
 
 This public version keeps two supported backbones:
 
@@ -200,6 +182,21 @@ Kimi-Audio-EvA training expects one JSON object per line:
 
 Qwen2.5-Omni-EvA can use the same format without `audio_tokens`. Relative audio
 paths are resolved relative to the JSONL file location.
+
+For Kimi-Audio-EvA, `audio_tokens` are produced by the Kimi/GLM-4 audio
+tokenizer before training. Start from a JSONL file whose audio messages contain
+audio paths, then run:
+
+```bash
+python -m kimi_audio_eva.extract_semantic_codes \
+  --model_name_or_path /path/to/Kimi-Audio-EvA-Base \
+  --input_file demo/data/audio_understanding/data.jsonl \
+  --output_file demo/data/audio_understanding/data_with_semantic_codes.jsonl
+```
+
+The script appends `audio_tokens` to each audio message. It supports resume by
+appending to an existing output file and can use multiple visible GPUs when
+available.
 
 ## Validation
 
