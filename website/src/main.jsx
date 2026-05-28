@@ -406,26 +406,28 @@ function DatasetPanel() {
   const sample = samples[activeSample];
 
   return (
-    <div>
-      <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-soft">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-indigo-600">
-            Dataset Interface
-          </p>
-          <h3 className="mt-2 text-2xl font-bold text-slate-950">
-            Audio-grounded QA Explorer
-          </h3>
-          <p className="mt-4 leading-7 text-slate-600">
-            Browse curated EvA-Perception examples with the original audio,
-            evidence-focused captions, and aligned question-answer annotations.
-          </p>
-          <div className="mt-6 grid grid-cols-3 gap-3">
+    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-soft">
+      <div className="border-b border-slate-200 p-5 sm:p-6">
+        <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-indigo-600">
+              Dataset Interface
+            </p>
+            <h3 className="mt-2 text-2xl font-bold text-slate-950">
+              Audio-grounded QA Explorer
+            </h3>
+            <p className="mt-3 max-w-3xl leading-7 text-slate-600">
+              Browse curated EvA-Perception examples with the original audio,
+              evidence-focused captions, and aligned question-answer annotations.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
             {[
               ["Samples", samples.length || 3],
               ["Audio", "WAV"],
               ["Format", "JSONL"]
             ].map(([label, value]) => (
-              <div key={label} className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <div key={label} className="min-w-24 rounded-md border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   {label}
                 </p>
@@ -433,89 +435,88 @@ function DatasetPanel() {
               </div>
             ))}
           </div>
-          <div className="mt-6 space-y-2">
-            {(samples.length ? samples : [{ id: "Loading..." }, { id: "Loading..." }, { id: "Loading..." }]).map(
-              (item, index) => (
-                <button
-                  key={`${item.id}-${index}`}
-                  type="button"
-                  onClick={() => setActiveSample(index)}
-                  disabled={!samples.length}
-                  className={`flex w-full items-center justify-between rounded-md border px-4 py-3 text-left text-sm transition ${
-                    activeSample === index && samples.length
-                      ? "border-indigo-200 bg-indigo-50 text-indigo-800"
-                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  }`}
-                >
-                  <span className="font-semibold">Sample {index + 1}</span>
-                  <span className="font-mono text-xs text-slate-500">{item.id}</span>
-                </button>
-              )
-            )}
-          </div>
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white shadow-soft">
-          <div className="border-b border-slate-200 px-5 py-4">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-semibold text-slate-950">Sample Preview</p>
-                <p className="text-sm text-slate-500">
-                  {sample ? sample.id : loadState === "error" ? "Unable to load demo data" : "Loading demo data"}
+        <div className="mt-5 grid gap-2 md:grid-cols-3">
+          {(samples.length ? samples : [{ id: "Loading..." }, { id: "Loading..." }, { id: "Loading..." }]).map(
+            (item, index) => (
+              <button
+                key={`${item.id}-${index}`}
+                type="button"
+                onClick={() => setActiveSample(index)}
+                disabled={!samples.length}
+                className={`flex min-h-14 items-center justify-between rounded-md border px-4 py-3 text-left text-sm transition ${
+                  activeSample === index && samples.length
+                    ? "border-indigo-200 bg-indigo-50 text-indigo-800 shadow-sm"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                <span className="font-semibold">Sample {index + 1}</span>
+                <span className="font-mono text-xs text-slate-500">{item.id}</span>
+              </button>
+            )
+          )}
+        </div>
+      </div>
+
+      <div className="p-5 sm:p-6">
+        {sample ? (
+          <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+            <div className="space-y-5">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                      Audio Evidence
+                    </p>
+                    <p className="mt-1 font-mono text-xs text-slate-500">{sample.id}</p>
+                  </div>
+                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                    Live demo
+                  </span>
+                </div>
+                <audio
+                  key={sample.id}
+                  controls
+                  preload="metadata"
+                  src={`./demo/${sample.demo_audio_path}`}
+                  className="w-full"
+                >
+                  Your browser does not support the audio element.
+                </audio>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 p-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  Question
+                </p>
+                <p className="font-semibold leading-7 text-slate-950">
+                  {sample.qa?.question}
                 </p>
               </div>
-              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                Live demo
-              </span>
+
+              <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-indigo-600">
+                  Answer
+                </p>
+                <p className="leading-7 text-slate-700">{sample.qa?.answer}</p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 p-5">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                Evidence Caption
+              </p>
+              <p className="leading-8 text-slate-700">{sample.caption}</p>
             </div>
           </div>
-          <div className="space-y-5 p-5">
-            {sample ? (
-              <>
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                  <audio
-                    key={sample.id}
-                    controls
-                    preload="metadata"
-                    src={`./demo/${sample.demo_audio_path}`}
-                    className="w-full"
-                  >
-                    Your browser does not support the audio element.
-                  </audio>
-                </div>
-
-                <div className="rounded-lg border border-slate-200 p-4">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                    Evidence Caption
-                  </p>
-                  <p className="leading-7 text-slate-700">{sample.caption}</p>
-                </div>
-
-                <div className="rounded-lg border border-slate-200 p-4">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                    Question
-                  </p>
-                  <p className="font-semibold leading-7 text-slate-950">
-                    {sample.qa?.question}
-                  </p>
-                </div>
-
-                <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-4">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-indigo-600">
-                    Answer
-                  </p>
-                  <p className="leading-7 text-slate-700">{sample.qa?.answer}</p>
-                </div>
-              </>
-            ) : (
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-6 text-sm leading-6 text-slate-500">
-                {loadState === "error"
-                  ? "Demo data could not be loaded. Please check public/demo/demo_pairs.jsonl."
-                  : "Loading demo samples..."}
-              </div>
-            )}
+        ) : (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-6 text-sm leading-6 text-slate-500">
+            {loadState === "error"
+              ? "Demo data could not be loaded. Please check public/demo/demo_pairs.jsonl."
+              : "Loading demo samples..."}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
