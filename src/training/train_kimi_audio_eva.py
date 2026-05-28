@@ -1,11 +1,12 @@
 # train_kimi_audio_eva.py
 # Kimi-Audio-EvA training entry: supports full-parameter and LoRA modes.
 #
-# 使用方式：
-#   use_lora=False（默认）：仅对 trainable_modules 全参微调
+# Usage:
+#   use_lora=False (default): full-parameter fine-tune only trainable_modules.
 #     torchrun ... train_kimi_audio_eva.py --trainable_modules model.ced_processor,model.vq_adaptor ...
 #
-#   use_lora=True：对 lora_modules 注入 LoRA，trainable_modules 额外全参
+#   use_lora=True: inject LoRA into lora_modules and additionally train
+#   trainable_modules with full parameters.
 #     torchrun ... train_kimi_audio_eva.py --use_lora True --lora_r 64 --lora_alpha 64 \
 #                           --trainable_modules model.ced_processor,model.vq_adaptor ...
 
@@ -60,7 +61,8 @@ class TrainingArguments(transformers.TrainingArguments):
     model_max_length: int = field(default=8192)
     bf16: bool = field(default=True)
     fp16: bool = field(default=False)
-    # 全参训练 ced_processor/vq_adaptor 时会有未使用参数（消融开关关闭时），需要设为 True
+    # Full-parameter ced_processor/vq_adaptor training can leave unused params
+    # when ablation switches are disabled, so keep this True.
     ddp_find_unused_parameters: bool = field(default=True)
     save_strategy: str = field(default="no")
 
@@ -69,7 +71,7 @@ class TrainingArguments(transformers.TrainingArguments):
 class LoRAArguments:
     use_lora: bool = field(
         default=False,
-        metadata={"help": "是否启用 LoRA。False=仅对 trainable_modules 全参微调"},
+        metadata={"help": "Enable LoRA. False means full-parameter fine-tuning only for trainable_modules."},
     )
     lora_r: int = field(default=16)
     lora_alpha: int = field(default=32)
@@ -77,20 +79,20 @@ class LoRAArguments:
     adapter_name: str = field(default="default")
     lora_modules: Optional[str] = field(
         default="model.layers",
-        metadata={"help": "LoRA 作用范围的模块前缀（逗号分隔）。默认: model.layers"},
+        metadata={"help": "Comma-separated module prefixes where LoRA is applied. Default: model.layers"},
     )
     lora_target_layers: Optional[str] = field(
         default="q_proj,k_proj,v_proj,o_proj",
-        metadata={"help": "LoRA 目标层类型（逗号分隔）。默认: q_proj,k_proj,v_proj,o_proj"},
+        metadata={"help": "Comma-separated LoRA target layer types. Default: q_proj,k_proj,v_proj,o_proj"},
     )
     trainable_modules: Optional[str] = field(
         default="model.ced_processor,model.vq_adaptor",
         metadata={
             "help": (
-                "全参可训模块前缀（逗号分隔）。"
-                "use_lora=False 时作为唯一可训模块；"
-                "use_lora=True 时在 LoRA 之外额外全量训练。"
-                "默认: model.ced_processor,model.vq_adaptor"
+                "Comma-separated full-parameter trainable module prefixes. "
+                "When use_lora=False, these are the only trainable modules. "
+                "When use_lora=True, these are additionally trained outside LoRA. "
+                "Default: model.ced_processor,model.vq_adaptor"
             )
         },
     )
@@ -102,9 +104,9 @@ class LoRAArguments:
 
 class KimiAudioTrainer(Trainer):
     """
-    统一 Trainer：
-    - compute_loss：仅计算文本 CE，配合 datasets.py 已完成的 label shift + mask
-    - optimizer_step：每步后 log ced_processor.alpha（若存在）
+    Unified Trainer:
+    - compute_loss computes text CE only, using label shift and masks prepared in datasets.py.
+    - optimizer_step logs ced_processor.alpha after each step when present.
     """
 
     def optimizer_step(self, *args, **kwargs):
@@ -156,7 +158,7 @@ def train():
         torch.cuda.set_device(local_rank)
         rank0_print(f"[DDP] set CUDA device to local_rank={local_rank}")
 
-    # ── 加载模型与 tokenizer ──────────────────────────────────────────────────
+    # Load model and tokenizer.
     logger.info("Loading Kimi-Audio base model")
     cache_path = model_args.model_name_or_path if os.path.exists(model_args.model_name_or_path) \
                  else snapshot_download(model_args.model_name_or_path)
@@ -167,7 +169,7 @@ def train():
         model_name_or_path=model_args.model_name_or_path,
         model_load_kwargs={"low_cpu_mem_usage": True, "torch_dtype": torch.bfloat16},
     )
-    # 设置消融开关：是否在前向传播中使用CED特征
+    # Set ablation switch: whether CED features are used in forward.
     model.use_ced_in_forward = model_args.use_ced_in_forward
     if not model_args.use_ced_in_forward:
         rank0_print(f"[Ablation] CED features will be MASKED in forward pass (use_ced_in_forward=False)")
@@ -176,7 +178,7 @@ def train():
     extra = instantiate_extra_tokens(tokenizer)
     pad_id = extra.pad
 
-    # ── 数据 ─────────────────────────────────────────────────────────────────
+    # Data.
     data_module = make_supervised_data_module(
         text_tokenizer=tokenizer,
         data_args=data_args,
@@ -185,30 +187,30 @@ def train():
         seed=training_args.seed,
     )
 
-    # ── 冻结全部参数 ──────────────────────────────────────────────────────────
+    # Freeze all parameters.
     for _, p in model.named_parameters():
         p.requires_grad = False
 
-    # ── LoRA 或全参解冻 ───────────────────────────────────────────────────────
+    # Enable LoRA or full-parameter training.
     if lora_args.use_lora:
         model = attach_lora(model, lora_args)
     else:
         trainable_mods = [m.strip() for m in lora_args.trainable_modules.split(",") if m.strip()] \
             if lora_args.trainable_modules else []
         if not trainable_mods:
-            logger.warning("use_lora=False 且 trainable_modules 未设置，没有任何参数会被训练！")
+            logger.warning("use_lora=False and trainable_modules is empty; no parameters will be trained.")
         for n, p in model.named_parameters():
             if any(n.startswith(pref) for pref in trainable_mods):
                 p.requires_grad = True
 
-    # ── 强制冻结 CED encoder / Whisper encoder（防御性：避免 trainable_modules 误开启）─
+    # Force-freeze CED and Whisper encoders to prevent accidental trainable_modules matches.
     for n, p in model.named_parameters():
         if ".ced_model." in n or n.startswith("ced_model."):
             p.requires_grad = False
         if ".whisper_model." in n or n.startswith("whisper_model."):
             p.requires_grad = False
 
-    # ── 消融开关：进一步冻结不参与前向的参数（避免 DDP unused 参数报错）─────────
+    # Ablation switches: freeze parameters not participating in forward to avoid DDP unused-param errors.
     if not CED_USE_FREQ_GATE:
         for name, p in model.named_parameters():
             if "model.ced_processor.audio_aggregator.gate" in name:
@@ -229,7 +231,7 @@ def train():
 
     print_trainable_params(model)
 
-    # ── Trainer ───────────────────────────────────────────────────────────────
+    # Trainer.
     trainer = KimiAudioTrainer(
         model=model,
         args=training_args,

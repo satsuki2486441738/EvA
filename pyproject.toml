@@ -1,6 +1,6 @@
-# 仓库级 Python 工具配置（lint / format / pytest）。
-# 不是包定义文件 —— eva_processor / qwen2_5_omni_eva / kimi_audio_eva
-# 各自有独立的 pyproject.toml。
+# Repository-level Python tool configuration for lint, format, and pytest.
+# This is not a package definition file; eva_processor, qwen2_5_omni_eva, and
+# kimi_audio_eva each have their own pyproject.toml.
 
 [tool.black]
 line-length = 100

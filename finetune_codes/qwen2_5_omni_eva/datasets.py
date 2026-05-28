@@ -19,8 +19,8 @@ IGNORE_INDEX = -100
 AUDIO_TOKEN = "<|AUDIO|>"
 AUDIO_SPAN = "<|audio_bos|><|AUDIO|><|audio_eos|>"
 
-MIN_AUDIO_SAMPLES = 1024  # 64ms @ 16kHz，低于此值 CED STFT 不可靠
-MIN_AUDIO_DURATION = MIN_AUDIO_SAMPLES / 16000  # 换算为秒，与原始采样率无关
+MIN_AUDIO_SAMPLES = 1024  # 64 ms @ 16 kHz; shorter clips make CED STFT unreliable.
+MIN_AUDIO_DURATION = MIN_AUDIO_SAMPLES / 16000  # Seconds; independent of the source sample rate.
 
 
 def _qwen2_5_omni_audio_output_len(mel_len: int) -> int:
@@ -31,7 +31,7 @@ def _qwen2_5_omni_audio_output_len(mel_len: int) -> int:
 
 
 def _check_audio_ok(path: str) -> bool:
-    """检查音频文件是否可用。文件不存在、损坏或过短时返回 False。"""
+    """Return False when the audio file is missing, corrupted, or too short."""
     if not os.path.exists(path):
         logger.warning(f"Audio file not found: {path}")
         return False
@@ -103,7 +103,7 @@ class Qwen2_5OmniEvaDataset(Dataset):
                                     part[key] = os.path.normpath(os.path.join(self.data_dir, path))
 
     def _convert_fusiona_format(self, conversation):
-        """FusionaData 格式 -> 标准 from/value 格式"""
+        """Convert FusionaData format to the standard from/value format."""
         result = []
         current_role = None
         current_parts = []
@@ -130,7 +130,7 @@ class Qwen2_5OmniEvaDataset(Dataset):
         return result
 
     def _extract_audio_path(self, text):
-        """提取 <audio>path</audio> 中的路径，替换为官方 audio span 占位符。"""
+        """Extract the path from <audio>path</audio> and replace it with the official audio span."""
         match = re.search(r'<audio>(.*?)</audio>', text)
         if match:
             replaced = text.replace(match.group(0), AUDIO_SPAN)
@@ -138,7 +138,7 @@ class Qwen2_5OmniEvaDataset(Dataset):
         return None, text
 
     def _get_audio_paths_from_item(self, item):
-        """提取一个样本中所有音频路径，无音频返回空列表。"""
+        """Extract all audio paths from one sample; return an empty list when none exist."""
         paths = []
         conversations = item.get('conversations') or item.get('conversation', [])
         for turn in conversations:
@@ -160,7 +160,7 @@ class Qwen2_5OmniEvaDataset(Dataset):
         return paths
 
     def _filter_bad_audio(self, data):
-        """过滤音频有问题的样本（文件不存在、损坏、过短）。无音频的纯文本样本保留。"""
+        """Filter samples with missing, corrupted, or too-short audio; keep text-only samples."""
         valid, n_bad = [], 0
         audio_ok_cache = {}
         for item in data:

@@ -3,8 +3,9 @@
 # Copyright 2025 The Moonshot AI Team, Qwen Team, and HuggingFace Inc.
 # (license headers unchanged)
 
-# 共享的 EvA processor（AudioAggregator/CEDProcessor/时间对齐函数 + 消融开关）
-# 已迁出到独立的 eva_processor 包。这里 re-export 以保持向后兼容。
+# Shared EvA processor components: AudioAggregator, CEDProcessor, time alignment,
+# and ablation switches. They now live in eva_processor and are re-exported here
+# for backward compatibility.
 from eva_processor import (
     AudioAggregator,
     BertLayer,
@@ -95,7 +96,7 @@ def _upad_input(query_layer, key_layer, value_layer, padding_mask, query_length)
         indices_q = cu_seqlens_q[:-1]
         query_layer = query_layer.squeeze(1)
     else:
-        padding_mask = padding_mask[:, -query_length:]  # 左填充假设
+        padding_mask = padding_mask[:, -query_length:]  # Left-padding assumption.
         query_layer, indices_q, cu_seqlens_q, max_seqlen_in_batch_q = unpad_input(
             query_layer, padding_mask
         )
@@ -172,10 +173,11 @@ class RotaryEmbedding(nn.Module):
         self.register_buffer("sin_cached", emb.sin().to(dtype), persistent=False)
 
     def forward(self, x, seq_len=None):
-        # 首次调用时无条件重建 cos/sin cache。
-        # transformers 5.x 的 from_pretrained 在 init_empty_weights() 上下文中运行 __init__，
-        # 所有 tensor 操作产生 meta tensor；persistent=False 的 buffer 不在 checkpoint 里，
-        # 物化后可能是 NaN、全零或其他无效值（取决于内存内容），必须无条件重建。
+        # Rebuild cos/sin cache unconditionally on first use. Transformers 5.x
+        # runs __init__ inside init_empty_weights() during from_pretrained, so
+        # tensor operations create meta tensors. persistent=False buffers are not
+        # saved in checkpoints, and after materialization they may contain NaN,
+        # zeros, or other invalid values depending on memory contents.
         if not getattr(self, '_rope_ready', False):
             inv_freq = 1.0 / (
                 self.base ** (
@@ -269,7 +271,8 @@ class MoonshotAttention(nn.Module):
         key_states   = key_states.transpose(1, 2)
         value_states = value_states.transpose(1, 2)
 
-        # Flash-Attn 要求半精度；若被悄悄升到 FP32，则优先还原为 BF16
+        # FlashAttention requires half precision; cast back to BF16 if upstream
+        # layers silently upcasted to FP32.
         input_dtype = query_states.dtype
         if input_dtype == torch.float32:
             logger.warning_once(
@@ -280,7 +283,7 @@ class MoonshotAttention(nn.Module):
             key_states   = key_states.to(torch.bfloat16)
             value_states = value_states.to(torch.bfloat16)
 
-        dropout_rate = 0.0  # 若训练建议配合 dropout
+        dropout_rate = 0.0  # Enable with dropout if needed for training.
 
         attn_output = self._flash_attention_forward(
             query_states,
@@ -534,14 +537,15 @@ class MoonshotKimiaModel(Qwen2PreTrainedModel):
             if text_input_ids is not None:
                 text_emb = self.embed_tokens(text_input_ids)
 
-            # 在生成续步（没有音频新帧）时，mask 可能为 None；兜底为全 0
+            # During generation continuation steps there are no new audio frames;
+            # if the mask is missing, fall back to all False.
             if is_continuous_mask is None:
                 if audio_input_ids is not None:
                     is_continuous_mask = torch.zeros_like(audio_input_ids, dtype=torch.bool)
                 elif text_input_ids is not None:
                     is_continuous_mask = torch.zeros_like(text_input_ids, dtype=torch.bool)
                 else:
-                    # 理论到不了这里，仅防御
+                    # Defensive path; this should not be reachable.
                     raise RuntimeError("Cannot infer shape to build is_continuous_mask.")
             is_continuous_mask_expanded = is_continuous_mask.unsqueeze(-1)
 
@@ -552,7 +556,7 @@ class MoonshotKimiaModel(Qwen2PreTrainedModel):
             has_whisper = False
             has_ced = False
 
-            # Whisper 特征填充（BF16）
+            # Whisper feature placement (BF16).
             if self.use_whisper_feature and whisper_input_feature is not None and whisper_input_feature.numel() > 0:
                 whisper_emb = self.vq_adaptor(whisper_input_feature)  # [B, Tw, D]
                 for i in range(batch_size):
@@ -564,7 +568,8 @@ class MoonshotKimiaModel(Qwen2PreTrainedModel):
                             whisper_emb[i, :actual_len, :].to(fused_whisper_placeholder.dtype)
                 has_whisper = True
 
-            # CED 特征填充（外部 CedEncoder 已 FP32，传入前在 model.py 转为 BF16；CEDProcessor 内部已 * alpha）
+            # CED feature placement. External CedEncoder is FP32, model.py casts
+            # inputs to BF16 before this point, and CEDProcessor applies alpha.
             if self.use_ced_feature and ced_input_feature is not None and ced_input_feature[0].numel() > 0:
                 ced_flat_4, ced_flat_8, ced_flat_last = ced_input_feature
                 proc_160 = self.ced_processor(

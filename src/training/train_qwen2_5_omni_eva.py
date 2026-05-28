@@ -49,8 +49,8 @@ class DataArguments:
     max_length: int = field(default=8192, metadata={"help": "Maximum sequence length"})
 
 
-# 直接使用 transformers.TrainingArguments，不继承
-# 这样可以避免 argparse 的格式化字符串问题
+# Use transformers.TrainingArguments directly instead of subclassing it to avoid
+# argparse format-string issues.
 
 
 @dataclass
@@ -177,7 +177,7 @@ def train():
     rank0_print(f"Loading CED model from: {ced_path}")
 
     from kimia_infer.models.tokenizer.ced_base.modeling_ced import CedEncoder
-    # CED 加载需要访问 HuggingFace，暂时允许在线访问
+    # CED loading may need Hugging Face access, so temporarily allow online access.
     old_offline = os.environ.get('HF_HUB_OFFLINE')
     old_transformers_offline = os.environ.get('TRANSFORMERS_OFFLINE')
     os.environ['HF_HUB_OFFLINE'] = '0'
@@ -185,7 +185,7 @@ def train():
     try:
         ced_model = CedEncoder(ced_path)
     finally:
-        # 恢复原始设置
+        # Restore the original offline settings.
         if old_offline is None:
             os.environ.pop('HF_HUB_OFFLINE', None)
         else:

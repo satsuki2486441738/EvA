@@ -15,10 +15,10 @@ logger = hf_logging.get_logger(__name__)
 
 def _top_k_top_p_filtering(logits, top_k=0, top_p=1.0, min_p: float = 0.0, filter_value=-float("inf")):
     """
-    对 logits 做 top-k / top-p / min-p 过滤（逐样本）。
-    - top-k: 只保留概率前 k
+    Apply top-k, top-p, and min-p filtering per sample.
+    - top-k: keep only the top-k most likely tokens.
     - top-p: nucleus sampling
-    - min-p: 过滤掉小于阈值的 token 概率
+    - min-p: remove tokens whose probability is below the threshold.
     """
     # top-k
     if top_k and top_k > 0:
@@ -43,7 +43,7 @@ def _top_k_top_p_filtering(logits, top_k=0, top_p=1.0, min_p: float = 0.0, filte
         )
         logits = logits.masked_fill(indices_to_remove, filter_value)
 
-    # min-p（在 top-p 之后做）
+    # Apply min-p after top-p.
     if min_p and min_p > 0.0:
         probs = torch.softmax(logits, dim=-1)
         logits = logits.masked_fill(probs < min_p, filter_value)
@@ -55,10 +55,10 @@ class KimiAudioModel(MoonshotKimiaForCausalLM):
     """for training, containing whisper and ced models"""
     def __init__(self, config):
         super().__init__(config)
-        # 训练态：外部装载
+        # Training mode: external encoders are loaded separately.
         self.whisper_model = None
         self.ced_model = None
-        # 消融开关：是否在前向传播中使用CED特征
+        # Ablation switch: controls whether CED features are used in forward.
         self.use_ced_in_forward = True
 
     @classmethod
@@ -70,7 +70,7 @@ class KimiAudioModel(MoonshotKimiaForCausalLM):
             print(f"'{model_name_or_path}' is not a local path. Downloading from Hugging Face Hub...")
             cache_path = snapshot_download(model_name_or_path)
 
-        # 1) 加载 LLM 主体
+        # 1) Load the base language model.
         print("Loading base Language Model (MoonshotKimiaForCausalLM)...")
         model = super(KimiAudioModel, cls).from_pretrained(
             cache_path,
@@ -79,7 +79,7 @@ class KimiAudioModel(MoonshotKimiaForCausalLM):
         )
         print("Base Language Model loaded successfully.")
 
-        # 2) 加载外部音频编码器
+        # 2) Load external audio encoders.
         whisper_path = os.path.join(cache_path, "whisper-large-v3")
         ced_path = os.path.join(cache_path, "ced-base")
         if not os.path.exists(whisper_path):
@@ -90,14 +90,14 @@ class KimiAudioModel(MoonshotKimiaForCausalLM):
         model.whisper_model = WhisperEncoder(whisper_path, mel_batch_size=20)
         model.ced_model = CedEncoder(ced_path)
 
-        # 3) 精度策略：Whisper -> BF16, CED -> FP32（满足 CED 中 LN 的 FP32 约束）
+        # 3) Precision policy: Whisper -> BF16, CED -> FP32 for LayerNorm stability.
         dev = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         try:
             model.whisper_model.to(device=dev, dtype=torch.bfloat16).eval()
         except Exception:
-            # 个别实现不支持直接切 dtype，退化成仅 to(device) + eval
+            # Some implementations cannot change dtype directly; fall back to device-only placement.
             model.whisper_model.to(device=dev).eval()
-        # CED 始终 FP32
+        # Keep CED in FP32.
         model.ced_model.to(device=dev, dtype=torch.float32).eval()
 
         print("KimiAudioModel successfully assembled with Whisper and CED components.")
@@ -132,21 +132,21 @@ class KimiAudioModel(MoonshotKimiaForCausalLM):
         return_dict: Optional[bool] = None,
     ):
         """
-        训练前向：
-        - Whisper 编码：BF16（autocast）
-        - CED 编码：强制 FP32（禁用 autocast），满足 LayerNorm FP32 约束
-        - 主干：BF16（autocast）
+        Training forward pass:
+        - Whisper encoding: BF16 with autocast.
+        - CED encoding: forced FP32 without autocast for LayerNorm stability.
+        - Backbone: BF16 with autocast.
         """
         whisper_feats = None
         ced_feats_tuple = None
 
         if waveform is not None and waveform.numel() > 0:
             with torch.no_grad():
-                # 将波形放到与模型一致的设备
+                # Move waveform to the model device.
                 dev = next(self.parameters()).device
                 waveform = waveform.to(dev)
 
-                # Whisper feature extraction（允许 BF16）
+                # Whisper feature extraction can use BF16.
                 try:
                     with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                         whisper_output = self.whisper_model(waveform)
@@ -159,8 +159,8 @@ class KimiAudioModel(MoonshotKimiaForCausalLM):
                     whisper_output.shape[2] * 4,
                 ).to(torch.bfloat16)
 
-                # CED feature extraction（强制 FP32：禁用 autocast）
-                # 消融开关：use_ced_in_forward=False 时跳过CED特征提取
+                # CED feature extraction is forced to FP32 by disabling autocast.
+                # Skip CED extraction when the ablation switch is disabled.
                 if self.use_ced_in_forward:
                     try:
                         with torch.autocast(device_type="cuda", enabled=False):
@@ -170,7 +170,7 @@ class KimiAudioModel(MoonshotKimiaForCausalLM):
 
                     all_ced_hidden_states = ced_output.hidden_states
                     if len(all_ced_hidden_states) > 7:
-                        # 先保持 FP32，随后传给主干前转 BF16（主干/投影通常是 BF16）
+                        # Keep FP32 first, then cast to BF16 before feeding the backbone.
                         ced_feat_4 = all_ced_hidden_states[3].to(torch.bfloat16)
                         ced_feat_8 = all_ced_hidden_states[7].to(torch.bfloat16)
                         ced_feat_last = all_ced_hidden_states[-1].to(torch.bfloat16)
@@ -180,12 +180,12 @@ class KimiAudioModel(MoonshotKimiaForCausalLM):
                             f"CED model has only {len(all_ced_hidden_states)} layers. Cannot extract features from layers 4 and 8."
                         )
 
-        # 主干 BF16 计算
+        # Backbone BF16 computation.
         use_cuda_autocast = torch.cuda.is_available()
         autocast_ctx = torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16) if use_cuda_autocast else nullcontext()
 
-        # 从 waveform_lengths 计算 CED 池化后的有效时间步数
-        # CED encoder: hop_size=160 samples * patch_stride=16 mel frames → 每 2560 samples 一个池化时间步
+        # Compute valid CED pooled time steps from waveform_lengths.
+        # CED encoder: hop_size=160 samples * patch_stride=16 mel frames -> one pooled step per 2560 samples.
         ced_valid_lengths = None
         if waveform_lengths is not None and self.use_ced_in_forward:
             ced_valid_lengths = (waveform_lengths.to(torch.long) // 2560).clamp(min=0)
@@ -219,7 +219,7 @@ class KimiAudioModel(MoonshotKimiaForCausalLM):
         waveform: torch.FloatTensor = None,
         attention_mask: torch.LongTensor = None,
         position_ids: torch.LongTensor = None,
-        kimia_processor=None,   # 用于取 blank/eos 等（可选）
+        kimia_processor=None,   # Optional source for blank/eos ids.
         max_new_tokens: int = 128,
         do_sample: bool = True,
         temperature: float = 1.0,
@@ -232,7 +232,8 @@ class KimiAudioModel(MoonshotKimiaForCausalLM):
         **unused,
     ):
         """
-        自定义生成（文本续写）：首步支持多模态，续步只采样文本（音频流写 blank）。
+        Custom text generation: the first step supports multimodal inputs;
+        subsequent steps sample text only and write blank audio tokens.
         """
         device = text_input_ids.device
         B, _ = text_input_ids.shape
@@ -250,7 +251,7 @@ class KimiAudioModel(MoonshotKimiaForCausalLM):
         if pad is None:
             pad = 0
 
-        # attention mask 兜底
+        # Build a fallback attention mask.
         if attention_mask is None:
             if audio_input_ids is not None:
                 nonpad_audio = (audio_input_ids != pad)
@@ -288,7 +289,7 @@ class KimiAudioModel(MoonshotKimiaForCausalLM):
             past_key_values = outputs.past_key_values
             text_logits = outputs.logits[:, -1, :]  # [B, V]
 
-            # 已完成样本屏蔽
+            # Mask finished samples.
             if eos is not None:
                 text_logits = text_logits.masked_fill(finished_mask.unsqueeze(-1), float("-inf"))
                 text_logits[:, eos] = torch.where(
@@ -297,19 +298,19 @@ class KimiAudioModel(MoonshotKimiaForCausalLM):
                     text_logits[:, eos],
                 )
 
-            # 温度缩放 + 过滤
+            # Temperature scaling and filtering.
             if temperature and temperature > 0:
                 text_logits = text_logits / float(temperature)
             text_logits = _top_k_top_p_filtering(text_logits, top_k=top_k, top_p=top_p, min_p=min_p)
 
-            # 采样/贪心
+            # Sampling or greedy decoding.
             if do_sample:
                 probs = torch.softmax(text_logits, dim=-1)
                 next_tokens = torch.multinomial(probs, num_samples=1)  # [B,1]
             else:
                 next_tokens = torch.argmax(text_logits, dim=-1, keepdim=True)
 
-            # 更新完成标记
+            # Update finished flags.
             if eos is not None:
                 finished_mask |= (next_tokens.squeeze(-1) == eos)
             generated.append(next_tokens)
@@ -317,14 +318,14 @@ class KimiAudioModel(MoonshotKimiaForCausalLM):
             if torch.all(finished_mask):
                 break
 
-            # 续步：只喂文本；音频给 blank 占位；不再需要 waveform/连续掩码
+            # Continuation steps feed text only; audio uses blank placeholders.
             cur_text = next_tokens
             blank = kimia_processor.extra.kimia_text_blank if kimia_processor is not None else 0
             cur_audio = torch.full_like(cur_text, blank)
             cur_mask  = torch.zeros_like(cur_text, dtype=torch.bool)
             cur_wave  = None
 
-            # attention_mask / position_ids 递增一位
+            # Extend attention_mask and position_ids by one step.
             attention_mask = torch.cat(
                 [attention_mask,
                 torch.ones(attention_mask.size(0), 1, device=device, dtype=torch.bool)],

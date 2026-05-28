@@ -2,7 +2,7 @@
 import argparse
 import os
 import json
-from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig  # 兼容环境
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig  # Compatibility imports.
 from huggingface_hub import snapshot_download
 import tqdm
 
@@ -10,7 +10,7 @@ import multiprocessing as mp
 import torch
 from typing import Tuple, List
 
-# 更快的 json（可选）
+# Optional faster JSON backend.
 try:
     import orjson as fastjson
     def _loads(s): return fastjson.loads(s)
@@ -29,15 +29,14 @@ def _read_all_lines(path: str) -> List[str]:
 
 def _resume_state(output_file: str) -> Tuple[int, bool]:
     """
-    返回 (已完成行数, 是否修复过最后一行)。
-    逻辑：
-      - 文件不存在 -> (0, False)
-      - 存在 -> 统计行数 N；若最后一行 JSON 解析失败，则将其丢弃（覆盖写回），返回 (N-1, True)
+    Return (completed_line_count, whether_the_last_line_was_repaired).
+    If the output file exists and the last JSONL line is corrupted, drop that
+    partial line and return the repaired count.
     """
     if not os.path.exists(output_file):
         return 0, False
 
-    # 尽量只读最后一行；为简洁与稳健，这里读取全部行（发生在崩溃场景下且很少）
+    # Read all lines for simplicity; this only runs during rare resume paths.
     lines = _read_all_lines(output_file)
     if not lines:
         return 0, False
@@ -47,7 +46,7 @@ def _resume_state(output_file: str) -> Tuple[int, bool]:
         _ = _loads(last)
         return len(lines), False
     except Exception:
-        # 丢弃最后一行（半截/损坏）
+        # Drop the last partial or corrupted line.
         safe_lines = lines[:-1]
         with open(output_file, "w") as fw:
             for ln in safe_lines:
@@ -57,8 +56,9 @@ def _resume_state(output_file: str) -> Tuple[int, bool]:
 
 def _worker(rank, device_id, cache_path, kimia_token_offset, kimia_text_audiodelaytokens, lines, out_path):
     """
-    每个进程绑定一张 GPU，处理自己的分片，输出到分片文件。
-    输出格式与原脚本一致：对 message_type=="audio" 的消息添加 audio_tokens 字段。
+    Bind each worker to one GPU, process its shard, and write a part file.
+    The output format matches the original input with audio_tokens added to
+    messages where message_type == "audio".
     """
     torch.cuda.set_device(device_id)
     torch.set_grad_enabled(False)
@@ -104,23 +104,23 @@ def main():
     if args.audio_token_cache is not None:
         os.environ["KIMIA_AUDIO_TOKEN_CACHE"] = args.audio_token_cache
 
-    # 准备模型路径
+    # Resolve the model path.
     if os.path.exists(args.model_name_or_path):
         cache_path = args.model_name_or_path
     else:
         cache_path = snapshot_download(args.model_name_or_path)
 
-    # 读取必要的 config 字段
+    # Read the required config fields.
     model_config = AutoConfig.from_pretrained(cache_path, trust_remote_code=True)
     kimia_token_offset = getattr(model_config, "kimia_token_offset", 0)
     kimia_text_audiodelaytokens = getattr(model_config, "kimia_mimo_audiodelaytokens", 0)
 
-    # 读取输入
+    # Read input lines.
     with open(args.input_file, "r") as f:
         lines = f.readlines()
     total = len(lines)
 
-    # —— 断点续传：检查已有输出，决定从第几行续 —— #
+    # Resume support: inspect existing output and continue from the next line.
     done_n, fixed = _resume_state(args.output_file)
     if done_n > 0:
         tqdm.tqdm.write(f"[resume] detected {done_n} completed line(s){' (fixed last line)' if fixed else ''}.")
@@ -128,19 +128,19 @@ def main():
         tqdm.tqdm.write("[resume] output already complete. nothing to do.")
         return
 
-    # 待处理的剩余行
+    # Lines that still need processing.
     remaining = lines[done_n:]
 
     num_gpus = torch.cuda.device_count()
 
-    # 单卡：顺序追加
+    # Single-GPU path: append sequentially.
     if num_gpus <= 1:
         prompt_manager = KimiAPromptManager(
             model_path=cache_path,
             kimia_token_offset=kimia_token_offset,
             kimia_text_audiodelaytokens=kimia_text_audiodelaytokens
         )
-        # 以“追加”方式写入（断点续传关键点）
+        # Append mode is required for resume support.
         with open(args.output_file, "a", buffering=1024 * 1024) as f_out:
             for line in tqdm.tqdm(remaining, desc="GPU0"):
                 data = _loads(line)
@@ -156,7 +156,7 @@ def main():
                 f_out.write(_dumps(data) + "\n")
         return
 
-    # 多卡：把“剩余行”分片并行，处理完按序追加到 output_file
+    # Multi-GPU path: shard remaining lines, then append part files in order.
     parts = []
     rem_total = len(remaining)
     for r in range(num_gpus):
@@ -166,7 +166,7 @@ def main():
 
     mp.set_start_method("spawn", force=True)
 
-    # 清理可能存在的旧分片文件（避免上次崩溃遗留）
+    # Remove stale part files left by interrupted runs.
     for rank in range(num_gpus):
         pf = f"{args.output_file}.part{rank:02d}"
         if os.path.exists(pf):
@@ -183,7 +183,7 @@ def main():
             target=_worker,
             args=(
                 rank,               # rank
-                rank,               # device_id: 0..N-1 对应 CUDA_VISIBLE_DEVICES
+                rank,               # device_id: 0..N-1 after CUDA_VISIBLE_DEVICES remapping
                 cache_path,
                 kimia_token_offset,
                 kimia_text_audiodelaytokens,
@@ -197,14 +197,14 @@ def main():
     for p in procs:
         p.join()
 
-    # 以“追加”方式合并到主输出（断点续传关键点）
+    # Append part files to the main output in rank order.
     with open(args.output_file, "a", buffering=1024 * 1024) as f_out:
         for pf in part_files:
             with open(pf, "r") as fin:
                 for line in fin:
                     f_out.write(line)
 
-    # 清理分片
+    # Clean up part files.
     for pf in part_files:
         try:
             os.remove(pf)

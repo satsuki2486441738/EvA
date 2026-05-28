@@ -1,5 +1,5 @@
 # coding=utf-8
-"""AudioAggregator: 多频带门控池化 + BertLayer 跨层融合。"""
+"""AudioAggregator: multi-band gated pooling plus BertLayer cross-layer fusion."""
 
 import torch
 from torch import nn
@@ -102,7 +102,7 @@ class AudioAggregator(nn.Module):
     def _prepool_freq(self, x_flat: torch.Tensor) -> torch.Tensor:
         B, N, D = x_flat.shape
         if N % self.F != 0:
-            return x_flat  # 兜底：无法还原频带轴就不做门控
+            return x_flat  # Fallback: skip gating when the frequency-band axis cannot be restored.
         T = N // self.F
         x = x_flat.contiguous().view(B, self.F, T, D).transpose(1, 2)  # [B, T, F, D]
         score = self.gate(x)                    # [B, T, F, 1]
@@ -115,9 +115,9 @@ class AudioAggregator(nn.Module):
         k8 = self._prepool_freq(ced_feat_8)
         k4 = self._prepool_freq(ced_feat_4)
 
-        # valid_lengths: [B]，池化后每个样本的有效时间步数 T_valid
-        # 构造 key_padding_mask [B, T]：True 表示要被 mask 的 padding 位置
-        # 防御：clamp(min=1) 避免全 padding（valid=0）导致 attention softmax 全 -inf → NaN
+        # valid_lengths: [B], valid pooled time steps for each sample.
+        # key_padding_mask [B, T]: True marks padding positions to mask.
+        # Defensive clamp(min=1) avoids all-padding rows causing softmax(-inf) -> NaN.
         key_padding_mask = None
         if valid_lengths is not None:
             T = q.shape[1]

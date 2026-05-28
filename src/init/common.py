@@ -1,12 +1,13 @@
-"""init/common.py — init 脚本共用的小工具。
+"""Shared utilities for init scripts.
 
-只放真正在 ≥2 个 init 文件里重复的逻辑：
-  - setup_logger:   统一 logging 配置
-  - load_safetensors_shards: 从目录加载 model*.safetensors，合成单个 state_dict
-  - report_state_dict_load: 打印 missing/unexpected，并校验非 ced_processor 的 missing
-  - copy_files / copy_directory: 文件 / 整目录拷贝，缺失给 warning
+Only keep logic that is actually shared by two or more init files:
+  - setup_logger: unified logging setup
+  - load_safetensors_shards: load model*.safetensors from a directory into one state_dict
+  - report_state_dict_load: print missing/unexpected keys and validate missing keys
+  - copy_files / copy_directory: copy files or directories with warnings for missing sources
 
-不抽"加载 base 模型 → 拷权重 → 保存"这条主流程，架构差异较大，模板化反而难读。
+Do not abstract the main "load base model -> copy weights -> save" workflow;
+the supported backbones differ enough that a template would be harder to read.
 """
 
 import json
@@ -25,10 +26,11 @@ def setup_logger(name=None):
 
 
 def load_safetensors_shards(model_path, logger=None):
-    """加载 safetensors 权重。
+    """Load safetensors weights.
 
-    优先遵循 HuggingFace 的 model.safetensors.index.json，避免目录中残留或混合命名的
-    safetensors 分片被误读。没有 index 时才退回到顶层 model*.safetensors。
+    Prefer Hugging Face's model.safetensors.index.json so stale or mixed-name
+    safetensors shards in the directory are not read accidentally. Fall back to
+    top-level model*.safetensors only when the index is absent.
     """
     from safetensors.torch import load_file
 
@@ -63,7 +65,7 @@ def load_safetensors_shards(model_path, logger=None):
 def report_state_dict_load(missing, unexpected, expected_missing_substr="ced_processor",
                            logger=None, max_print=10, allowed_missing_substrs=None,
                            fail_on_unexpected_missing=False):
-    """统一打印 load_state_dict(strict=False) 的结果，并校验未预期的 missing。"""
+    """Print load_state_dict(strict=False) results and validate unexpected missing keys."""
     log = logger or logging.getLogger(__name__)
     allowed_missing_substrs = allowed_missing_substrs or [expected_missing_substr]
     log.info(f"Missing keys ({len(missing)}):")
@@ -99,7 +101,7 @@ def report_state_dict_load(missing, unexpected, expected_missing_substr="ced_pro
 
 
 def copy_files(src_dir, dst_dir, filenames, logger=None):
-    """从 src_dir 拷指定文件名到 dst_dir。缺失给 warning。"""
+    """Copy selected files from src_dir to dst_dir, warning when files are missing."""
     log = logger or logging.getLogger(__name__)
     for fname in filenames:
         src = os.path.join(src_dir, fname)
@@ -112,7 +114,7 @@ def copy_files(src_dir, dst_dir, filenames, logger=None):
 
 
 def copy_directory(src, dst, logger=None):
-    """整目录拷贝，存在则先删。src 不存在给 warning，不抛错。"""
+    """Copy a directory after removing dst if present; warn and return False if src is missing."""
     log = logger or logging.getLogger(__name__)
     if not os.path.exists(src):
         log.warning(f"Source directory not found: {src}")

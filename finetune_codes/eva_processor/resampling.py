@@ -1,18 +1,18 @@
 # coding=utf-8
-"""时间对齐：将 CED processor 的输出重采样到 whisper-style audio token 步长。"""
+"""Time alignment: resample CED processor outputs to Whisper-style audio-token steps."""
 
 import torch
 
 
 def resample_proc_to_whisper_timeaware(
-    x_t: torch.Tensor,      # [T_c, H]  （ced_processor 输出，160ms 时间步）
-    feat_len: int,          # 目标 whisper token 个数（该段内）
-    T_mel: int,             # 该段真实 mel 帧数（≈ feat_len * 8）
-    L_t: int = 1012,        # CED block 长度（mel 帧）
-    t_st: int = 16,         # CED token 步长（mel 帧）
-    t_sz: int = 16,         # CED token 窗宽（mel 帧）
-    step_mel: int = 8,      # whisper 每 token 的 mel 帧数 (=80ms)
-    center_mel: int = 4,    # whisper token 中心偏移
+    x_t: torch.Tensor,      # [T_c, H], ced_processor output at 160 ms steps.
+    feat_len: int,          # Target number of Whisper tokens in the segment.
+    T_mel: int,             # Actual mel-frame count, roughly feat_len * 8.
+    L_t: int = 1012,        # CED block length in mel frames.
+    t_st: int = 16,         # CED token stride in mel frames.
+    t_sz: int = 16,         # CED token window size in mel frames.
+    step_mel: int = 8,      # Whisper mel frames per token (=80 ms).
+    center_mel: int = 4,    # Whisper token center offset.
 ) -> torch.Tensor:          # -> [feat_len, H]
     T_c, H = x_t.shape
     device = x_t.device

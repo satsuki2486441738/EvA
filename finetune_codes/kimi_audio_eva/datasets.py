@@ -12,12 +12,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-MIN_AUDIO_SAMPLES = 1024  # 64ms @ 16kHz，低于此值 CED STFT 不可靠
-MIN_AUDIO_DURATION = MIN_AUDIO_SAMPLES / 16000  # 换算为秒，与原始采样率无关
+MIN_AUDIO_SAMPLES = 1024  # 64 ms @ 16 kHz; shorter clips make CED STFT unreliable.
+MIN_AUDIO_DURATION = MIN_AUDIO_SAMPLES / 16000  # Seconds; independent of the source sample rate.
 
 
 def _check_audio_ok(path: str) -> bool:
-    """检查音频文件是否可用。文件不存在、损坏或过短时返回 False。"""
+    """Return False when the audio file is missing, corrupted, or too short."""
     if not os.path.exists(path):
         logger.warning(f"Audio file not found: {path}")
         return False
@@ -38,8 +38,8 @@ class LazySupervisedDataset(Dataset):
         super(LazySupervisedDataset, self).__init__()
         self.max_len = max_len
 
-        # 过滤 audio_tokens 为 None 或长度过短的坏样本
-        MIN_AUDIO_TOKENS = 8  # 避免whisper编码长度与audio token数量不匹配
+        # Filter samples with missing or too-short audio_tokens.
+        MIN_AUDIO_TOKENS = 8  # Avoid mismatches between Whisper length and audio-token count.
         valid_data = [
             s for s in raw_data_list
             if all(
@@ -52,7 +52,8 @@ class LazySupervisedDataset(Dataset):
         if n_bad:
             print(f"Warning: filtered out {n_bad} samples (audio_tokens=None or len<{MIN_AUDIO_TOKENS})")
 
-        # 过滤音频文件不存在、损坏或过短的样本，并显式执行当前训练假设：每条样本只含一段音频。
+        # Filter missing, corrupted, or too-short audio files and enforce the
+        # current training assumption: exactly one audio clip per sample.
         def _get_audio_paths(item):
             return [msg["content"] for msg in item.get("conversation", [])
                     if msg.get("message_type") == "audio" and msg.get("content")]
@@ -99,19 +100,19 @@ class LazySupervisedDataset(Dataset):
         with torch.no_grad():
             waveform, sample_rate = torchaudio.load(wav_path, normalize=True)  # [C, T] or [T]
 
-            # 统一成 [C, T]
+            # Normalize to [C, T].
             if waveform.dim() == 1:
                 waveform = waveform.unsqueeze(0)  # -> [1, T]
-            # 任意多声道都合成单声道
+            # Mix any multi-channel input down to mono.
             if waveform.size(0) > 1:
                 waveform = waveform.mean(dim=0, keepdim=True)  # -> [1, T]
 
-            # 重采样到 16k
+            # Resample to 16 kHz.
             if sample_rate != 16000:
                 resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000)
-                waveform = resampler(waveform)  # 期望 [1, T']
+                waveform = resampler(waveform)  # Expected shape: [1, T'].
 
-            # 返回 1D [T]
+            # Return 1D [T].
             return waveform.squeeze(0).contiguous()
 
     def _tokenize_text(self, text):
@@ -162,7 +163,7 @@ class LazySupervisedDataset(Dataset):
             kimia_content_msg.audio_extend([self.extra_tokens.kimia_text_blank] * len(text_tokens))
 
             if role == "assistant":
-                # 文本流 EOS；音频流补一个 blank 对齐且不计 loss
+                # Text stream EOS; audio stream adds a blank for alignment without loss.
                 kimia_content_msg.text_append(self.extra_tokens.kimia_text_eos, has_loss)  # eos for text stream
                 kimia_content_msg.audio_append(self.extra_tokens.kimia_text_blank, audio_token_loss_mask=False)
 
@@ -180,8 +181,8 @@ class LazySupervisedDataset(Dataset):
                     kimia_content_msg.audio_append(self.extra_tokens.kimia_speech_ctd_id)
                 kimia_content_msg.text_append(self.extra_tokens.kimia_text_blank)
 
-            # 不在这里加载波形；仅保存路径，由 __getitem__/collate 再处理
-            kimia_content_msg.continuous_feature.append(message["content"])  # 路径
+            # Store only the path here; waveform loading happens in __getitem__/collate.
+            kimia_content_msg.continuous_feature.append(message["content"])  # Path.
 
         elif message["message_type"] is None:
             pass
@@ -259,7 +260,7 @@ class LazySupervisedDataset(Dataset):
         wav_path = audio_paths[0]
         waveform = self._load_wav_once(wav_path)
 
-        # 右移一位，构造 labels 与 loss mask
+        # Shift by one position to build labels and loss masks.
         audio_labels = torch.cat((audio_input_ids[:, 1:], audio_input_ids.new_full((1, 1), self.pad_token)), dim=1)
         text_labels = torch.cat((text_input_ids[:, 1:], text_input_ids.new_full((1, 1), self.pad_token)), dim=1)
         audio_loss_mask = torch.cat((audio_token_loss_mask[:, 1:], audio_token_loss_mask.new_full((1, 1), False)), dim=1)
@@ -299,20 +300,20 @@ class LazySupervisedDataset(Dataset):
         L = t.size(0)
         if L == target_len:
             return t
-        pad = (0, target_len - L)  # (left, right) -> 右侧补零
+        pad = (0, target_len - L)  # (left, right) -> right padding.
         return F.pad(t, pad, value=pad_value)
         
     @staticmethod
     def collate_fn(batch: List[Dict], pad_token_id: int = None) -> Dict[str, torch.Tensor]:
         pad_id = 0 if pad_token_id is None else int(pad_token_id)
 
-        # 1) 先各自最大
+        # 1) Compute each stream's maximum length.
         max_a = max(x['audio_input_ids'].size(0) for x in batch)
         max_t = max(x['text_input_ids'].size(0)  for x in batch)
-        # 2) 统一到同一个 L
+        # 2) Pad both streams to the same length L.
         L = max(max_a, max_t)
 
-        # helper：left padding function
+        # Left-padding helpers.
         LP1 = LazySupervisedDataset._left_pad_1d
         LPB = LazySupervisedDataset._left_pad_bool
 
@@ -336,7 +337,7 @@ class LazySupervisedDataset(Dataset):
         else:
             padded_waveforms = torch.zeros(len(batch), 0)
 
-        # ---- attention_mask 与位置编码将使用统一长度 L ----
+        # attention_mask and position ids use the shared length L.
         nonpad_audio = (audio_input_ids != pad_id)
         nonpad_text  = (text_input_ids  != pad_id)
         attention_mask = (nonpad_audio | nonpad_text)

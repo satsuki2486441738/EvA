@@ -1,5 +1,5 @@
 # coding=utf-8
-"""CEDProcessor: 把 CED encoder 的多层特征融合并投影到 LLM hidden size。"""
+"""CEDProcessor: fuse multi-layer CED encoder features and project to the LLM hidden size."""
 
 import torch
 from torch import nn
@@ -9,12 +9,12 @@ from .audio_aggregator import AudioAggregator
 
 class CEDProcessor(nn.Module):
     """
-    CED 特征处理器。
+    CED feature processor.
 
-    config 需要提供：
-      - ced_processor_input_dim: int (CED 隐层维度，e.g. 768)
-      - hidden_size: int (LLM hidden size，e.g. 4096)
-      - ced_freq_bands: int (可选，默认 4)
+    Required config fields:
+      - ced_processor_input_dim: int (CED hidden dimension, e.g. 768)
+      - hidden_size: int (LLM hidden size, e.g. 4096)
+      - ced_freq_bands: int (optional, defaults to 4)
     """
 
     def __init__(self, config):
@@ -46,12 +46,14 @@ class CEDProcessor(nn.Module):
 
     def forward(self, *args, valid_lengths=None, **kwargs):
         """
-        兼容两种调用：
-        1) 被某些 wrapper 包裹后：forward(x) 且 x 为 (ced_feat_4, ced_feat_8, ced_feat_last)
-        2) 原始关键字：forward(ced_feat_4=..., ced_feat_8=..., ced_feat_last=...)
+        Supports two call styles:
+        1) Wrapped positional call: forward(x), where x is
+           (ced_feat_4, ced_feat_8, ced_feat_last).
+        2) Native keyword call: forward(ced_feat_4=..., ced_feat_8=..., ced_feat_last=...).
 
-        valid_lengths（可选）：[B] 张量，池化后每个样本的有效时间步数 T_valid，
-        用于在 AudioAggregator 内部屏蔽 padding 位置的 attention，避免污染。
+        valid_lengths is optional [B] tensor with valid pooled time steps per
+        sample. AudioAggregator uses it to mask padding positions and avoid
+        attention contamination.
         """
         if len(args) == 1 and not kwargs:
             x = args[0]

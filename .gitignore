@@ -19,7 +19,7 @@ __editable__.*
 .ipynb_checkpoints/
 *.ipynb_checkpoints
 
-# 运行时产物（不进版本控制）
+# Runtime artifacts
 logs/
 checkpoints/
 *.log
@@ -28,15 +28,15 @@ nohup.out
 wandb/
 runs/
 
-# 数据（不进版本控制）
+# Data
 data/training/
 data/raw/
 
-# 评估 / 绘图产物
+# Evaluation and plot artifacts
 *.png
 !docs/**/*.png
 
-# 临时数据
+# Temporary data
 *.tmp
 *.cache
 .cache/
@@ -49,12 +49,12 @@ data/raw/
 *.swp
 *.swo
 
-# 模型权重（外部存储，不进仓库）
+# Model weights stored externally
 *.bin
 *.safetensors
 *.pt
 *.pth
 *.ckpt
 
-# 但以下例外：
+# Exceptions:
 !**/configuration_*.py

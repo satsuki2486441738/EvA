@@ -33,7 +33,7 @@ logger = setup_logger(__name__)
 
 
 def load_qwen_omni_weights(model_path):
-    """加载 Qwen2.5-Omni 权重，仅保留 Thinker 的 audio_tower、model 和 lm_head。"""
+    """Load Qwen2.5-Omni weights, keeping only Thinker's audio_tower, model, and lm_head."""
     state_dict = load_safetensors_shards(model_path, logger=logger)
 
     filtered_state_dict = {}
@@ -69,21 +69,21 @@ def main():
     from qwen2_5_omni_eva.modeling_qwen2_5_omni_eva import Qwen2_5OmniEvaForConditionalGeneration
     from transformers import AutoConfig
 
-    # 2. 加载 Qwen2.5-Omni 配置
+    # 2. Load Qwen2.5-Omni config.
     logger.info(f"Loading Qwen2.5-Omni config from: {args.qwen_omni_path}")
     qwen_omni_config = AutoConfig.from_pretrained(args.qwen_omni_path, trust_remote_code=True)
 
-    # 3. 创建 Qwen2.5-Omni-EvA 配置
+    # 3. Create Qwen2.5-Omni-EvA config.
     logger.info("Creating Qwen2.5-Omni-EvA config...")
 
-    # 提取 thinker_config 的 audio / vision / text 配置和 token/rope 相关配置
+    # Extract audio/vision/text configs and token/rope settings from thinker_config.
     thinker_config = qwen_omni_config.thinker_config
     if hasattr(thinker_config, 'audio_config'):
         audio_cfg = thinker_config.audio_config
         vision_cfg = thinker_config.vision_config
         text_cfg = thinker_config.text_config
     else:
-        # 如果是字典形式
+        # Dict-style config fallback.
         audio_cfg = thinker_config.get('audio_config') if isinstance(thinker_config, dict) else thinker_config.audio_config
         vision_cfg = thinker_config.get('vision_config') if isinstance(thinker_config, dict) else thinker_config.vision_config
         text_cfg = thinker_config.get('text_config') if isinstance(thinker_config, dict) else thinker_config.text_config
@@ -116,19 +116,19 @@ def main():
     logger.info(f"  use_ced_feature={config.use_ced_feature}")
     logger.info(f"  ced_processor_input_dim={config.ced_processor_input_dim}")
 
-    # 4. 实例化模型 (随机初始化)
+    # 4. Instantiate the model with random initialization.
     logger.info("Instantiating Qwen2_5OmniEvaForConditionalGeneration (random init)...")
     model = Qwen2_5OmniEvaForConditionalGeneration(config)
 
-    # 5. 初始化 ced_processor 权重
+    # 5. Initialize ced_processor weights.
     logger.info("Initializing ced_processor weights...")
     model._initialize_newly_added_modules()
 
-    # 6. 加载 Qwen2.5-Omni 权重
+    # 6. Load Qwen2.5-Omni weights.
     logger.info(f"Loading Qwen2.5-Omni weights from: {args.qwen_omni_path}")
     qwen_omni_sd = load_qwen_omni_weights(args.qwen_omni_path)
 
-    # 7. 应用权重 (strict=False)
+    # 7. Apply weights with strict=False.
     logger.info("Loading Qwen2.5-Omni weights into EvA model (strict=False)...")
     missing, unexpected = model.load_state_dict(qwen_omni_sd, strict=False)
     report_state_dict_load(
@@ -139,23 +139,23 @@ def main():
         fail_on_unexpected_missing=True,
     )
 
-    # 8. 转换为 BF16
+    # 8. Convert to BF16.
     logger.info("Converting model to bfloat16...")
     model.to(torch.bfloat16)
 
-    # 9. 保存模型
+    # 9. Save model.
     os.makedirs(args.output_dir, exist_ok=True)
     logger.info(f"Saving model weights (bfloat16) to: {args.output_dir}")
     model.save_pretrained(args.output_dir, safe_serialization=True, max_shard_size="5GB")
 
-    # 10. 复制 CED 模型
+    # 10. Copy CED model.
     copy_directory(
         args.ced_path,
         os.path.join(args.output_dir, "ced-base"),
         logger=logger,
     )
 
-    # 11. 复制 tokenizer 文件
+    # 11. Copy tokenizer files.
     logger.info("Copying tokenizer files...")
     copy_files(args.qwen_omni_path, args.output_dir, [
         "tokenizer.json",
@@ -167,7 +167,7 @@ def main():
         "preprocessor_config.json",
     ], logger=logger)
 
-    # 12. 保存配置
+    # 12. Save config.
     logger.info("Saving config...")
     config.save_pretrained(args.output_dir)
 

@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 # ------------------------
-# 小工具
+# Utilities
 # ------------------------
 def rank0_print(*args):
     if (not torch.distributed.is_available()) or (not torch.distributed.is_initialized()):
@@ -44,7 +44,7 @@ def _unwrap_ddp(model):
 
 
 # ------------------------
-# LoRA 目标选择
+# LoRA target selection
 # ------------------------
 def collect_lora_targets(
     model: nn.Module,
@@ -53,9 +53,9 @@ def collect_lora_targets(
     excluded_prefixes: Optional[List[str]] = None,
 ) -> List[str]:
     """
-    - lora_modules: 限制 LoRA 作用范围的模块前缀列表（默认 ["model.layers"]）
-    - lora_target_layers: 在 lora_modules 范围内匹配的层类型（默认 attention 投影）
-    - excluded_prefixes: 强制排除的前缀（trainable_modules + 音频编码器）
+    - lora_modules: module prefixes that LoRA can target; defaults to ["model.layers"].
+    - lora_target_layers: layer names matched under lora_modules; defaults to attention projections.
+    - excluded_prefixes: prefixes that must be excluded, including trainable modules and audio encoders.
     """
     excluded = list(excluded_prefixes or []) + ["whisper_model", "ced_model"]
 
@@ -84,12 +84,13 @@ def collect_lora_targets(
 
 
 # ------------------------
-# PEFT/Transformers 接口适配
+# PEFT/Transformers compatibility
 # ------------------------
 def _ensure_prepare_inputs_for_generation(model: nn.Module) -> nn.Module:
     """
-    PEFT 在构建时会读取 pifg，避免它强行要求 input_ids。
-    多模态场景直接"原样透传"即可。
+    PEFT reads prepare_inputs_for_generation during construction. Provide a
+    pass-through implementation for this multimodal model so PEFT does not
+    require input_ids.
     """
     if hasattr(model, "prepare_inputs_for_generation"):
         return model
@@ -103,7 +104,8 @@ def _ensure_prepare_inputs_for_generation(model: nn.Module) -> nn.Module:
 
 def _patch_peft_forward_filter_kwargs(peft_model):
     """
-    某些 PEFT 包装会吞掉不认识的 kwargs，这里做一层白名单过滤后再转发给 base_model。
+    Some PEFT wrappers drop unknown kwargs. Filter through an allowlist before
+    forwarding to the base model.
     """
     base = peft_model.get_base_model()
     try:
@@ -127,15 +129,15 @@ def _patch_peft_forward_filter_kwargs(peft_model):
 
 
 # ------------------------
-# 组装 LoRA
+# LoRA assembly
 # ------------------------
 def attach_lora(model: KimiAudioModel, lora_args) -> nn.Module:
     """
-    lora_args 需要具备属性：
+    lora_args is expected to provide:
       - lora_r, lora_alpha, lora_dropout, adapter_name
-      - lora_modules: LoRA 作用范围前缀（逗号分隔，默认 model.layers）
-      - lora_target_layers: LoRA 层类型（逗号分隔，默认 q_proj,k_proj,v_proj,o_proj）
-      - trainable_modules: 全参可训模块前缀（逗号分隔，默认 None）
+      - lora_modules: comma-separated LoRA module prefixes; defaults to model.layers.
+      - lora_target_layers: comma-separated LoRA layer types; defaults to q_proj,k_proj,v_proj,o_proj.
+      - trainable_modules: comma-separated full-parameter trainable prefixes; defaults to None.
     """
     lora_modules = [m.strip() for m in lora_args.lora_modules.split(",") if m.strip()] \
         if getattr(lora_args, "lora_modules", None) else None
@@ -168,7 +170,7 @@ def attach_lora(model: KimiAudioModel, lora_args) -> nn.Module:
 
     _patch_peft_forward_filter_kwargs(peft_model)
 
-    # 冻结所有，再打开 LoRA 和 trainable_modules 的参数
+    # Freeze everything first, then enable LoRA and trainable_modules parameters.
     for _, p in peft_model.named_parameters():
         p.requires_grad = False
     for n, p in peft_model.named_parameters():
@@ -183,17 +185,17 @@ def attach_lora(model: KimiAudioModel, lora_args) -> nn.Module:
 
 
 # ------------------------
-# 合并 LoRA 并导出三包
+# Merge LoRA and export split model components
 # ------------------------
 def _build_cpu_shadow_model_and_merge(original_model: nn.Module) -> nn.Module:
     """
-    在 CPU 上重建同构 base -> 载入当前训练权重 -> 若有 LoRA，merge_and_unload ->
-    再把 modules_to_save 覆盖回 merged base。
+    Rebuild an isomorphic CPU base, load current training weights, merge LoRA if
+    present, then copy modules_to_save back into the merged base.
     """
     base_or_peft = _unwrap_ddp(original_model)
 
-    # 1) 用同构 config 重建 CPU 空壳（whisper/ced 保持 None，由 src_submodules 在 export 时提供，
-    #    避免 init_from_pretrained 将它们强制加载到 CUDA 导致显存翻倍）
+    # 1) Rebuild a CPU shell from the same config. Keep whisper/ced as None;
+    #    src_submodules provides them during export and avoids double CUDA memory use.
     base_cfg = base_or_peft.get_base_model().config if isinstance(base_or_peft, PeftModel) else base_or_peft.config
     base_cpu = KimiAudioModel(base_cfg)
     base_cpu = base_cpu.to(dtype=torch.float32)
@@ -201,21 +203,21 @@ def _build_cpu_shadow_model_and_merge(original_model: nn.Module) -> nn.Module:
     base_cpu.eval()
     _ensure_prepare_inputs_for_generation(base_cpu)
 
-    # 2) 抓当前权重到 CPU
+    # 2) Move current weights to CPU.
     with torch.no_grad():
         sd_cpu = {k: v.detach().to("cpu") for k, v in base_or_peft.state_dict().items()}
 
-    # 3) 非 PEFT：直接加载
+    # 3) Non-PEFT path: load directly.
     if not isinstance(base_or_peft, PeftModel):
         _ = base_cpu.load_state_dict(sd_cpu, strict=False)
         return base_cpu
 
-    # 4) 拿激活 adapter 的配置
+    # 4) Read the active adapter config.
     peft_cfg_map = base_or_peft.peft_config
     active_name = getattr(base_or_peft, "active_adapter", None) or next(iter(peft_cfg_map.keys()))
     active_cfg = peft_cfg_map[active_name]
 
-    # 5) 在 CPU base 注入 LoRA，再加载训练权重
+    # 5) Inject LoRA into the CPU base, then load training weights.
     from peft import get_peft_model as _get_peft_model
     shadow_peft_cpu = _get_peft_model(base_cpu, active_cfg, adapter_name=active_name)
     try:
@@ -229,12 +231,12 @@ def _build_cpu_shadow_model_and_merge(original_model: nn.Module) -> nn.Module:
     if len(missing) > 0:
         logger.warning(f"[Export] Missing keys when loading into CPU PEFT: {len(missing)}")
 
-    # 6) 合并 LoRA
+    # 6) Merge LoRA.
     with torch.no_grad():
         merged_cpu = shadow_peft_cpu.merge_and_unload()
     merged_cpu.eval()
 
-    # 7) 拷贝 modules_to_save 的权重回 merged_cpu
+    # 7) Copy modules_to_save weights back into merged_cpu.
     modules_to_copy = set()
     try:
         cfg = peft_cfg_map[active_name]
@@ -266,8 +268,9 @@ def _build_cpu_shadow_model_and_merge(original_model: nn.Module) -> nn.Module:
 
 def export_split_from_model(model_or_wrapper: nn.Module, export_dir: str) -> str:
     """
-    合并 LoRA -> 调用 KimiAudioModel.export_model 导出三包（LM/whisper/ced）。
-    src_submodules 传入**当前训练模型**，以便导出其 whisper/ced 子模块的权重。
+    Merge LoRA, then call KimiAudioModel.export_model to export split
+    components (LM/Whisper/CED). src_submodules receives the current training
+    model so its Whisper/CED submodule weights can be exported.
     """
     os.makedirs(export_dir, exist_ok=True)
     try:
@@ -290,12 +293,12 @@ def export_split_from_model(model_or_wrapper: nn.Module, export_dir: str) -> str
 
 
 # ------------------------
-# 回调：按 epoch 导出
+# Callback: export by epoch
 # ------------------------
 class ExportSplitCallback(TrainerCallback):
     """
-    每个 epoch 结束后导出一次 split（已融合 LoRA，兼容 DDP）。
-    只在主进程 (process_index==0) 执行导出，导出前后插 barrier 确保所有进程同步。
+    Export a split checkpoint after each configured epoch. LoRA is merged and
+    DDP is supported. Only the main process exports; barriers keep workers in sync.
     """
     def __init__(
         self,
@@ -354,13 +357,14 @@ class ExportSplitCallback(TrainerCallback):
 
 
 # ------------------------
-# 回调：按 step 导出（供 GRPO 使用）
+# Callback: export by step, used by GRPO-style workflows
 # ------------------------
 class ExportSplitByStepCallback(TrainerCallback):
     """
-    每隔 `every_n_steps` 优化步导出一次 split（已融合 LoRA）。
-    - 只在主进程 (process_index==0) 导出
-    - 训练结束时兜底再导出一次（如最后一步未正好命中步频）
+    Export a split checkpoint every `every_n_steps` optimizer steps with LoRA
+    merged.
+    - Export only on the main process (process_index == 0).
+    - Export once more at train end if the final step did not hit the interval.
     """
     def __init__(self, export_base_dir: str, every_n_steps: int = 100, keep_last_k: Optional[int] = None):
         super().__init__()
@@ -383,7 +387,7 @@ class ExportSplitByStepCallback(TrainerCallback):
                 logger.warning(f"[ExportSplitByStepCallback] Failed to remove {to_rm}: {e}")
 
     def on_step_end(self, args, state, control, **kwargs):
-        # 只在完成一个"优化步"（global_step 增加）后被调用
+        # Called after an optimizer step when global_step has advanced.
         if getattr(args, "process_index", 0) != 0:
             return
         gs = int(state.global_step or 0)
@@ -413,7 +417,7 @@ class ExportSplitByStepCallback(TrainerCallback):
         self._maybe_cleanup()
 
     def on_train_end(self, args, state, control, **kwargs):
-        # 训练结束兜底导出一次（如果最后一步没有命中步频）
+        # Final fallback export if the last step did not hit the interval.
         if getattr(args, "process_index", 0) != 0:
             return
         gs = int(state.global_step or 0)

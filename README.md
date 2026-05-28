@@ -11,6 +11,8 @@
 
 [Paper](https://arxiv.org/abs/2603.27667) | [Dataset](https://huggingface.co/datasets/SatsukiVie/EvidenceFirst-Audio) | [Models](#resources) | [Installation](#installation) | [Training](#train) | [Inference](#inference)
 
+English | [中文](README_zh.md)
+
 </div>
 
 EvA adds a CED-based second audio stream to audio-language foundation models.

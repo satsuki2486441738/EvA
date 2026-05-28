@@ -8,8 +8,8 @@ logger = logging.getLogger(__name__)
 
 def init_dist_if_needed() -> Tuple[int, int, int]:
     """
-    若以 torchrun 启动，初始化进程组，并返回 (rank, local_rank, world_size)。
-    否则返回 (0, 0, 1)。
+    Initialize torch.distributed when launched with torchrun and return
+    (rank, local_rank, world_size). Otherwise return (0, 0, 1).
     """
     import torch
     import torch.distributed as dist
@@ -33,7 +33,7 @@ def dist_barrier_if_needed():
         dist.barrier()
 
 def load_jsonl(file_path):
-    """加载 JSONL 文件"""
+    """Load a JSONL file."""
     data = []
     with open(file_path, 'r', encoding='utf-8') as f:
         for line in f:
@@ -43,14 +43,14 @@ def load_jsonl(file_path):
     return data
 
 def save_jsonl(data, file_path):
-    """保存数据到 JSONL 文件"""
+    """Save data to a JSONL file."""
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, 'w', encoding='utf-8') as f:
         for item in data:
             f.write(json.dumps(item, ensure_ascii=False) + '\n')
 
 def load_done_ids(output_file: str) -> Set[Any]:
-    """加载已完成的样本ID（用于断点续跑）"""
+    """Load completed sample IDs for resume support."""
     done = set()
     if not os.path.exists(output_file):
         return done
@@ -66,9 +66,9 @@ def load_done_ids(output_file: str) -> Set[Any]:
 
 def merge_parts(base_output: str, world_size: int):
     """
-    rank0 合并 part 文件到 JSONL 格式：
+    Rank 0 merges part files into a JSONL file.
     base_output: /path/to/output.jsonl
-    期望存在: /path/to/output.jsonl.part{0..world_size-1}
+    Expected parts: /path/to/output.jsonl.part{0..world_size-1}
     """
     base_dir = os.path.dirname(base_output)
     base_name = os.path.basename(base_output)
@@ -92,7 +92,7 @@ def merge_parts(base_output: str, world_size: int):
     logger.success(f"[merge] merged into: {base_output}")
 
 def process_conversation(conversation):
-    """处理对话，移除 assistant 的回复，保留用户输入，将assistant改为reference"""
+    """Keep user messages and move the assistant answer into a reference field."""
     chats = []
     reference_content = None
     
@@ -104,7 +104,7 @@ def process_conversation(conversation):
                 "content": message["content"]
             })
         elif message["role"] == "assistant":
-            # 将原有的assistant回复保存为reference
+            # Save the original assistant reply as reference.
             reference_content = message.get("content", "")
     
     return chats, reference_content
@@ -123,32 +123,32 @@ def resolve_relative_audio_paths(data, input_file):
 def run_dataset_inference(input_file, output_file, model_path, max_new_tokens=128, text_temperature=0.0,
                          resume=False, gather_on_rank0=False, show_every=20):
     """
-    运行数据集推理（支持多GPU torchrun分片）
+    Run dataset inference with optional multi-GPU torchrun sharding.
     """
     import torch
     from tqdm import tqdm
     from kimia_infer.api.kimia import KimiAudio
 
-    # --- 分布式初始化（若以 torchrun 启动） ---
+    # Distributed initialization when launched with torchrun.
     rank, local_rank, world_size = init_dist_if_needed()
     use_dist = (world_size > 1)
 
-    # --- 准备输出 part 文件名 ---
+    # Prepare output part filename.
     base_out = output_file
     if use_dist:
         part_out = f"{base_out}.part{rank}"
     else:
-        part_out = base_out  # 单进程单卡，直接写最终文件
+        part_out = base_out  # Single process/GPU: write directly to final output.
 
     logger.info(f"[rank={rank}] --- Starting Dataset Inference ---")
     
-    # 加载输入数据
+    # Load input data.
     logger.info(f"[rank={rank}] Loading input data from: {input_file}")
     input_data = load_jsonl(input_file)
     input_data = resolve_relative_audio_paths(input_data, input_file)
     logger.info(f"[rank={rank}] Loaded {len(input_data)} samples")
     
-    # 初始化模型
+    # Initialize model.
     logger.info(f"[rank={rank}] Initializing KimiAudio API from '{model_path}'...")
     try:
         kimia_api = KimiAudio(model_path=model_path, load_detokenizer=False)
@@ -157,42 +157,42 @@ def run_dataset_inference(input_file, output_file, model_path, max_new_tokens=12
         logger.error(f"[rank={rank}] Failed to initialize model: {e}")
         return
 
-    # --- 断点续跑 (针对当前 part 文件) ---
+    # Resume support for the current part file.
     done_ids: Set[Any] = set()
     if resume and os.path.exists(part_out):
         done_ids = load_done_ids(part_out)
         logger.info(f"[rank={rank}] Resume: loaded {len(done_ids)} done ids from {part_out}")
     
-    # 处理每个样本
+    # Process each sample.
     results = []
     total, selected, skipped, written = 0, 0, 0, 0
     
     for idx, sample in enumerate(tqdm(input_data, desc=f"Processing@rank{rank}")):
         total += 1
 
-        # 分片选择逻辑
+        # Shard selection.
         if use_dist:
-            # torchrun: 按 world_size/rank 分片
+            # torchrun: shard by world_size/rank.
             if (idx % world_size) != rank:
                 continue
 
         selected += 1
 
         try:
-            # 提取任务类型和对话
+            # Extract task type and conversation.
             task_type = sample.get("task_type", "understanding")
             conversation = sample["conversation"]
-            sample_id = sample.get("sample_id", idx)  # 使用样本ID或索引作为唯一标识
+            sample_id = sample.get("sample_id", idx)  # Use sample_id or index as the unique identifier.
             
-            # 断点续跑检查
+            # Resume check.
             if resume and sample_id in done_ids:
                 skipped += 1
                 continue
             
-            # 处理对话，只保留用户输入，提取reference
+            # Keep user inputs and extract the reference answer.
             chats, reference_content = process_conversation(conversation)
             
-            # 检查音频文件是否存在
+            # Check whether the audio file exists.
             audio_path = None
             for chat in chats:
                 if chat["message_type"] == "audio":
@@ -203,7 +203,7 @@ def run_dataset_inference(input_file, output_file, model_path, max_new_tokens=12
                 logger.warning(f"[rank={rank}] Audio file not found: {audio_path}, skipping sample {sample_id}")
                 continue
             
-            # 运行推理
+            # Run inference.
             with torch.inference_mode():
                 generated_wav, generated_text = kimia_api.generate(
                     chats=chats,
@@ -213,10 +213,10 @@ def run_dataset_inference(input_file, output_file, model_path, max_new_tokens=12
                     text_repetition_penalty=1.05
                 )
                 print(f"generated_text:{generated_text}")
-            # 构造输出格式
+            # Build output format.
             output_conversation = chats.copy()
             
-            # 添加reference（原有的assistant回复）
+            # Add reference, which is the original assistant reply.
             if reference_content:
                 output_conversation.append({
                     "role": "reference",
@@ -224,7 +224,7 @@ def run_dataset_inference(input_file, output_file, model_path, max_new_tokens=12
                     "content": reference_content
                 })
             
-            # 添加模型的真实输出作为assistant回复
+            # Add the model output as the assistant reply.
             output_conversation.append({
                 "role": "assistant",
                 "message_type": "text", 
@@ -249,13 +249,13 @@ def run_dataset_inference(input_file, output_file, model_path, max_new_tokens=12
             traceback.print_exc()
             continue
     
-    # 保存结果到 part 文件
+    # Save results to the part file.
     logger.info(f"[rank={rank}] Saving results to: {part_out}")
     save_jsonl(results, part_out)
     
     logger.info(f"[rank={rank}] DONE total={total}, selected={selected}, skipped={skipped}, written={written}")
 
-    # --- 可选：rank0 合并 ---
+    # Optional rank-0 merge.
     if gather_on_rank0 and use_dist:
         dist_barrier_if_needed()
         if rank == 0:
@@ -277,7 +277,7 @@ def main():
     parser.add_argument("--text_temperature", type=float, default=0.0,
                        help="Temperature for text generation")
     
-    # 其他参数
+    # Additional options.
     parser.add_argument("--resume", action="store_true", 
                        help="Resume on each part file")
     parser.add_argument("--gather_on_rank0", action="store_true", 
@@ -287,7 +287,7 @@ def main():
     
     args = parser.parse_args()
     
-    # 运行推理
+    # Run inference.
     run_dataset_inference(
         input_file=args.input_file,
         output_file=args.output_file,
