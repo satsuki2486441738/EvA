@@ -1,16 +1,39 @@
+<div align="center">
+
 # EvA
+
+### An Evidence-First Audio Understanding Paradigm for LALMs
+
+[![Paper](https://img.shields.io/badge/Paper-arXiv%3A2603.27667-b31b1b)](https://arxiv.org/abs/2603.27667)
+[![Dataset](https://img.shields.io/badge/Dataset-Hugging%20Face-ffcc4d)](https://huggingface.co/datasets/SatsukiVie/EvidenceFirst-Audio)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11-blue)](#installation)
+
+[Paper](https://arxiv.org/abs/2603.27667) | [Dataset](https://huggingface.co/datasets/SatsukiVie/EvidenceFirst-Audio) | [Models](#resources) | [Installation](#installation) | [Training](#train) | [Inference](#inference)
+
+</div>
 
 EvA adds a CED-based second audio stream to audio-language foundation models.
 The shared EvA processor aligns CED features with the base model audio tokens and
 injects the fused representation into the language model.
 
-## Links
+## Highlights
 
-| Resource | Hugging Face | ModelScope | Paper |
-|---|---|---|---|
-| Paper | - | - | [arXiv:2603.27667](https://arxiv.org/abs/2603.27667) |
-| Models | TBD | TBD | - |
-| Dataset | [SatsukiVie/EvidenceFirst-Audio](https://huggingface.co/datasets/SatsukiVie/EvidenceFirst-Audio) | TBD | - |
+| Item | Description |
+|---|---|
+| Evidence-first audio modeling | Adds an explicit CED evidence stream before the language model consumes fused audio representations. |
+| Two supported backbones | Public code supports Kimi-Audio-EvA and Qwen2.5-Omni-EvA. |
+| Open-source runnable layout | Includes install instructions, demo data, smoke tests, training scripts and inference entry points. |
+| Clean public scope | Checkpoints, logs, private datasets and historical experiment outputs are intentionally excluded. |
+
+## Resources
+
+| Resource | Link |
+|---|---|
+| Paper | [arXiv:2603.27667](https://arxiv.org/abs/2603.27667) |
+| Dataset | [Hugging Face: SatsukiVie/EvidenceFirst-Audio](https://huggingface.co/datasets/SatsukiVie/EvidenceFirst-Audio) |
+| Models | Hugging Face: TBD; ModelScope: TBD |
+| Dataset mirror | ModelScope: TBD |
 
 This public version keeps two supported backbones:
 
@@ -24,7 +47,7 @@ The shared components live in `finetune_codes/eva_processor/`.
 ## Repository Layout
 
 ```text
-EvA_pub/
+EvidenceFirst-Audio/
 ├── finetune_codes/
 │   ├── eva_processor/          # Shared AudioAggregator, CEDProcessor, resampling utilities
 │   ├── kimi_audio_eva/         # Kimi-Audio-EvA model, dataset, LoRA and export utilities
@@ -189,6 +212,22 @@ bash src/scripts/train_qwen2_5_omni_eva.sh --help
 ```
 
 Full training and inference require external backbone and CED model weights.
+
+## Citation
+
+If you find EvA useful, please cite:
+
+```bibtex
+@misc{xie2026evaevidencefirstaudiounderstanding,
+      title={EvA: An Evidence-First Audio Understanding Paradigm for LALMs}, 
+      author={Xinyuan Xie and Shunian Chen and Zhiheng Liu and Yuhao Zhang and Zhiqiang Lv and Liyin Liang and Benyou Wang},
+      year={2026},
+      eprint={2603.27667},
+      archivePrefix={arXiv},
+      primaryClass={cs.SD},
+      url={https://arxiv.org/abs/2603.27667}, 
+}
+```
 
 ## License
 
