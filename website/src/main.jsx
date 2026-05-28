@@ -414,18 +414,18 @@ function DatasetPanel() {
               Dataset Interface
             </p>
             <h3 className="mt-2 text-2xl font-bold text-slate-950">
-              Audio-grounded QA Explorer
+              EvA-Perception Demo
             </h3>
             <p className="mt-3 max-w-3xl leading-7 text-slate-600">
-              Browse curated EvA-Perception examples with the original audio,
-              evidence-focused captions, and aligned question-answer annotations.
+              Browse curated audio examples with evidence-aware captions and
+              paired question-answer annotations.
             </p>
           </div>
           <div className="grid grid-cols-3 gap-3">
             {[
               ["Samples", samples.length || 3],
               ["Audio", "WAV"],
-              ["Format", "JSONL"]
+              ["Views", "Caption + QA"]
             ].map(([label, value]) => (
               <div key={label} className="min-w-24 rounded-md border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -452,7 +452,7 @@ function DatasetPanel() {
                 }`}
               >
                 <span className="font-semibold">Sample {index + 1}</span>
-                <span className="font-mono text-xs text-slate-500">{item.id}</span>
+                <span className="text-xs text-slate-500">Demo clip</span>
               </button>
             )
           )}
@@ -461,53 +461,54 @@ function DatasetPanel() {
 
       <div className="p-5 sm:p-6">
         {sample ? (
-          <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-            <div className="space-y-5">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                      Audio Evidence
-                    </p>
-                    <p className="mt-1 font-mono text-xs text-slate-500">{sample.id}</p>
-                  </div>
-                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                    Live demo
-                  </span>
-                </div>
-                <audio
-                  key={sample.id}
-                  controls
-                  preload="metadata"
-                  src={`./demo/${sample.demo_audio_path}`}
-                  className="w-full"
-                >
-                  Your browser does not support the audio element.
-                </audio>
-              </div>
-
-              <div className="rounded-lg border border-slate-200 p-4">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                  Question
+          <div className="space-y-5">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  Audio Clip
                 </p>
-                <p className="font-semibold leading-7 text-slate-950">
-                  {sample.qa?.question}
-                </p>
+                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                  Live demo
+                </span>
               </div>
-
-              <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-4">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-indigo-600">
-                  Answer
-                </p>
-                <p className="leading-7 text-slate-700">{sample.qa?.answer}</p>
-              </div>
+              <audio
+                key={sample.id}
+                controls
+                preload="metadata"
+                src={`./demo/${sample.demo_audio_path}`}
+                className="w-full"
+              >
+                Your browser does not support the audio element.
+              </audio>
             </div>
 
-            <div className="rounded-lg border border-slate-200 p-5">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                Evidence Caption
-              </p>
-              <p className="leading-8 text-slate-700">{sample.caption}</p>
+            <div className="grid gap-5 lg:grid-cols-2">
+              <div className="rounded-lg border border-slate-200 p-5">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  Audio Caption
+                </p>
+                <p className="leading-8 text-slate-700">{sample.caption}</p>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 p-5">
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    Question
+                  </p>
+                  <p className="font-semibold leading-7 text-slate-950">
+                    {sample.qa?.question}
+                  </p>
+                </div>
+
+                <div className="mt-5 rounded-lg border border-indigo-100 bg-indigo-50/60 p-4">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-indigo-600">
+                    Reference Answer
+                  </p>
+                  <div className="max-h-56 overflow-y-auto pr-2">
+                    <p className="leading-7 text-slate-700">{sample.qa?.answer}</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         ) : (
