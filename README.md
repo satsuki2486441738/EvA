@@ -4,6 +4,14 @@ EvA adds a CED-based second audio stream to audio-language foundation models.
 The shared EvA processor aligns CED features with the base model audio tokens and
 injects the fused representation into the language model.
 
+## Links
+
+| Resource | Hugging Face | ModelScope | Paper |
+|---|---|---|---|
+| Paper | - | - | [arXiv:2603.27667](https://arxiv.org/abs/2603.27667) |
+| Models | TBD | TBD | - |
+| Dataset | [SatsukiVie/EvidenceFirst-Audio](https://huggingface.co/datasets/SatsukiVie/EvidenceFirst-Audio) | TBD | - |
+
 This public version keeps two supported backbones:
 
 | Backbone | Package | Training entry |
