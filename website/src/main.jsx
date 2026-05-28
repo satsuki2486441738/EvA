@@ -197,10 +197,11 @@ function Hero() {
           <Sparkles className="h-4 w-4" />
           Evidence-first audio understanding for LALMs
         </div>
-        <h1 className="mx-auto max-w-4xl text-balance text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl lg:text-6xl">
-          EvA: An Evidence-First Audio Understanding Paradigm for LALMs
+        <h1 className="mx-auto max-w-6xl text-balance text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl lg:text-6xl">
+          <span className="block">EvA: An Evidence-First Audio Understanding</span>
+          <span className="block">Paradigm for LALMs</span>
         </h1>
-        <p className="mx-auto mt-6 max-w-3xl text-base leading-7 text-slate-600 sm:text-lg">
+        <p className="mx-auto mt-6 max-w-5xl text-base leading-7 text-slate-600 sm:text-lg">
           Xinyuan Xie, Shunian Chen, Zhiheng Liu, Yuhao Zhang, Zhiqiang Lv,
           Liyin Liang, Benyou Wang
         </p>
