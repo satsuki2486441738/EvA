@@ -217,8 +217,8 @@ function Hero() {
           Large Audio Language Models (LALMs) struggle in complex acoustic
           scenes due to weak perceptual grounding. EvA introduces an
           evidence-first dual-path architecture to break this bottleneck,
-          achieving state-of-the-art open-source performance on MMAU, MMAR, and
-          MMSU benchmarks.
+          achieving competitive open-source performance on MMAU, MMAR, and MMSU
+          benchmarks.
         </p>
       </motion.div>
     </header>
